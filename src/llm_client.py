@@ -1,21 +1,17 @@
 """
-LLM client wrapper — imports call_llm / MODEL_FUNC_MAP from the shared
-llm_api_openai.py so that base_url, api_key and model names are never
+LLM client wrapper — imports call_llm / MODEL_FUNC_MAP from the local
+llm_api.py so that base_url, api_key and model names are never
 duplicated or hardcoded here.
 """
 
 import sys
 from pathlib import Path
 
-_REPO_ROOT = str(Path(__file__).resolve().parents[3])
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
+_CODE_ROOT = str(Path(__file__).resolve().parents[1])
+if _CODE_ROOT not in sys.path:
+    sys.path.insert(0, _CODE_ROOT)
 
-try:
-    from llm_api_openai import call_llm, call_by_name, MODEL_FUNC_MAP  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover
-    # Backward-compatible fallback for older repo layouts.
-    from llm_api import call_llm, call_by_name, MODEL_FUNC_MAP  # type: ignore
+from llm_api import call_llm, call_by_name, MODEL_FUNC_MAP  # noqa: E402
 
 
 def available_models():
