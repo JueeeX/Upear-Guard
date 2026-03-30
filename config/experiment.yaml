@@ -12,10 +12,10 @@ data:
   demo_subset_size: 3
 
 models:
-  # Keys must match MODEL_FUNC_MAP in llm_api_openai.py
+  # Keys must match MODEL_FUNC_MAP in llm_api.py
   agent_models:
-    - "deepseek_v3_2"
-  judge_model: "deepseek_v3_2"
+    - "deepseek_chat"
+  judge_model: "gpt4o"
 
 harness:
   types:
