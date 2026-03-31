@@ -38,9 +38,11 @@ class AdversarialContextFilter:
     """Runs content through the three-stage pipeline."""
 
     def __init__(self, config: dict[str, Any] | None = None,
-                 judge_model: str | None = None):
+                 judge_model: str | None = None,
+                 enabled: bool = True):
         self.config = config or {}
         self.judge_model = judge_model
+        self.enabled = enabled
         self._patterns: list[re.Pattern] = [
             re.compile(p, re.IGNORECASE)
             for p in self.config.get("suspicious_patterns", [
@@ -50,12 +52,20 @@ class AdversarialContextFilter:
                 r"IMPORTANT:\s*new instructions",
                 r"you must now",
                 r"forget everything",
+                r"you are now",
+                r"new role",
+                r"override.*(?:policy|instruction)",
+                r"act as.*(?:admin|root|sudo)",
             ])
         ]
 
     def filter(self, text: str,
                source_type: str = "user_input") -> FilteredContent:
         prov = ProvenanceTag(source_type=source_type)
+
+        if not self.enabled:
+            prov.sanitised = False
+            return FilteredContent(original=text, cleaned=text, provenance=prov)
 
         # Stage 1 — structural sanitisation
         cleaned = self._structural_clean(text)

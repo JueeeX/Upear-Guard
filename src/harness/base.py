@@ -88,6 +88,50 @@ class BaseHarness(ABC):
             "When you are done, output your final answer plainly."
         )
 
+    def _build_initial_messages(
+        self, task: dict[str, Any], system_prompt: str,
+        security_pipeline: Any | None = None,
+    ) -> list[dict[str, str]]:
+        """Build the initial message list for an LLM call.
+
+        Message order:
+          1. System prompt (optionally augmented by security pipeline)
+          2. ``task["dialog"]`` — pre-existing conversation context from the
+             dataset (e.g. Agent-SafetyBench multi-turn scenarios)
+          3. ``task["_fake_history"]`` — injected by the memory-injection
+             attack; filtered through L2 when the security pipeline is active
+          4. The real user instruction
+        """
+        if security_pipeline and hasattr(security_pipeline, "augment_system_prompt"):
+            system_prompt = security_pipeline.augment_system_prompt(system_prompt)
+
+        _filter = None
+        if security_pipeline and hasattr(security_pipeline, "filter_context"):
+            _filter = security_pipeline.filter_context
+
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": system_prompt},
+        ]
+
+        for msg in (task.get("dialog") or []):
+            content = msg.get("content", "")
+            role = msg.get("role", "user")
+            if _filter:
+                content = _filter(content, source="dialog")
+            messages.append({"role": role, "content": content})
+
+        for msg in (task.get("_fake_history") or []):
+            content = msg["content"]
+            if _filter:
+                content = _filter(content, source="inter_agent")
+            messages.append({"role": msg["role"], "content": content})
+
+        instruction = task["instruction"]
+        if _filter:
+            instruction = _filter(instruction, source="user_input")
+        messages.append({"role": "user", "content": instruction})
+        return messages
+
     def _parse_tool_call(self, text: str) -> dict | None:
         """Try to extract a tool-call JSON from model output."""
         for start_tok, end_tok in [("{", "}"), ("```json", "```")]:
@@ -118,8 +162,14 @@ class BaseHarness(ABC):
         parsed: dict,
         env: SimulatedEnvironment,
         security_pipeline: Any | None,
+        task: dict[str, Any] | None = None,
     ) -> ToolCall:
-        """Check security (if active), then execute or block the call."""
+        """Check security (if active), then execute or block the call.
+
+        If *task* carries an ``_indirect_payload``, append it to the
+        tool output to simulate indirect prompt injection via tool
+        responses (e.g. poisoned web content, RAG retrieval).
+        """
         tool_name = parsed["tool"]
         arguments = parsed.get("arguments", {})
 
@@ -128,4 +178,9 @@ class BaseHarness(ABC):
             if decision.blocked:
                 return env.record_blocked(tool_name, arguments, decision.reason)
 
-        return env.execute(tool_name, arguments)
+        tc = env.execute(tool_name, arguments)
+
+        if task and task.get("_indirect_payload"):
+            tc.result = tc.result + "\n" + task["_indirect_payload"]
+
+        return tc

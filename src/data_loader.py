@@ -86,6 +86,9 @@ def load_subset(n: int = 3, seed: int = 42) -> list[dict]:
     selected: list[dict] = []
     risk_keys = sorted(by_risk.keys())
 
+    if not risk_keys:
+        return data[:n]
+
     idx = 0
     while len(selected) < n:
         risk = risk_keys[idx % len(risk_keys)]

@@ -1,5 +1,10 @@
 """
 ReAct harness — Thought / Action / Observation reasoning loop.
+
+When a security pipeline is active:
+  - Tool outputs (observations) are filtered through L2 to detect
+    indirect prompt injection via tool responses.
+  - Each reasoning step is recorded in L3 for multi-step causal analysis.
 """
 
 from __future__ import annotations
@@ -26,16 +31,16 @@ class ReactHarness(BaseHarness):
             "When finished, write: Action: FINISH\nFinal Answer: <answer>"
         )
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": task["instruction"]},
-        ]
+        messages = self._build_initial_messages(task, system_prompt, security_pipeline)
         trace: list[dict] = []
         tool_calls, blocked = [], []
 
         for step in range(max_steps):
             response = call_model(self.model_name, messages) or ""
             trace.append({"role": "assistant", "content": response})
+
+            if security_pipeline and hasattr(security_pipeline, 'l3'):
+                security_pipeline.l3.record_reasoning(response)
 
             if "FINISH" in response.upper() or "Final Answer" in response:
                 break
@@ -44,13 +49,17 @@ class ReactHarness(BaseHarness):
             if parsed is None:
                 break
 
-            tc = self._try_tool_call(parsed, env, security_pipeline)
+            tc = self._try_tool_call(parsed, env, security_pipeline, task)
             if tc.blocked:
                 blocked.append(tc)
                 observation = f"[BLOCKED] {tc.block_reason}"
             else:
                 tool_calls.append(tc)
                 observation = tc.result
+
+            if security_pipeline and hasattr(security_pipeline, 'filter_context'):
+                observation = security_pipeline.filter_context(
+                    observation, source="tool_output")
 
             messages.append({"role": "assistant", "content": response})
             messages.append({"role": "user",

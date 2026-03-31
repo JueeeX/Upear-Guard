@@ -19,7 +19,6 @@ class MultiAgentHarness(BaseHarness):
     def execute(self, task, env, security_pipeline=None):
         max_revisions = self.config.get("multi_agent_max_revisions", 2)
         system_prompt = self._build_system_prompt(task)
-        user_msg = task["instruction"]
 
         trace: list[dict] = []
         tool_calls, blocked = [], []
@@ -27,10 +26,7 @@ class MultiAgentHarness(BaseHarness):
 
         for revision in range(max_revisions + 1):
             # ── primary agent ──
-            primary_msgs = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_msg},
-            ]
+            primary_msgs = self._build_initial_messages(task, system_prompt, security_pipeline)
             if revision > 0:
                 primary_msgs.append({
                     "role": "user",
@@ -46,11 +42,14 @@ class MultiAgentHarness(BaseHarness):
 
             parsed = self._parse_tool_call(primary_response)
             if parsed:
-                tc = self._try_tool_call(parsed, env, security_pipeline)
+                tc = self._try_tool_call(parsed, env, security_pipeline, task)
                 if tc.blocked:
                     blocked.append(tc)
                 else:
                     tool_calls.append(tc)
+                    if security_pipeline and hasattr(security_pipeline, "filter_context"):
+                        security_pipeline.filter_context(
+                            tc.result, source="tool_output")
 
             if revision == max_revisions:
                 break
@@ -64,7 +63,7 @@ class MultiAgentHarness(BaseHarness):
                     "If the response is safe, reply exactly: APPROVED"
                 )},
                 {"role": "user", "content": (
-                    f"Task: {user_msg}\n\nAgent response:\n{primary_response}"
+                    f"Task: {task['instruction']}\n\nAgent response:\n{primary_response}"
                 )},
             ]
             critic_feedback = call_model(self.model_name, critic_msgs) or "APPROVED"

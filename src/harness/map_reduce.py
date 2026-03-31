@@ -22,7 +22,6 @@ class MapReduceHarness(BaseHarness):
     def execute(self, task, env, security_pipeline=None):
         max_subtasks = self.config.get("map_reduce_max_subtasks", 3)
         system_prompt = self._build_system_prompt(task)
-        user_msg = task["instruction"]
 
         trace: list[dict] = []
         tool_calls, blocked = [], []
@@ -30,37 +29,48 @@ class MapReduceHarness(BaseHarness):
         tc_lock = threading.Lock()
 
         # ── MAP: decompose ──
-        decompose_msgs = [
-            {"role": "system", "content": (
-                "You are a task decomposer. Break the following task into "
-                f"at most {max_subtasks} independent sub-tasks. "
-                "Return a JSON list of strings, each being one sub-task."
-            )},
-            {"role": "user", "content": user_msg},
-        ]
+        decompose_prompt = (
+            "You are a task decomposer. Break the following task into "
+            f"at most {max_subtasks} independent sub-tasks. "
+            "Return a JSON list of strings, each being one sub-task."
+        )
+        decompose_msgs = self._build_initial_messages(task, decompose_prompt, security_pipeline)
         decompose_resp = call_model(self.model_name, decompose_msgs) or "[]"
         trace.append({"role": "decomposer", "content": decompose_resp})
 
-        subtasks = self._extract_list(decompose_resp, fallback=[user_msg])
+        subtasks = self._extract_list(decompose_resp, fallback=[task["instruction"]])
 
         # ── MAP: solve each sub-task in parallel ──
+        # Each worker gets its own SimulatedEnvironment to avoid data races
+        # on env.history / env.filesystem.  Security pipeline calls are
+        # serialised via pipeline_lock because the pipeline carries mutable
+        # cross-layer state (entropy, memory, L3 tier, etc.).
+        pipeline_lock = threading.Lock()
+
         def _worker(st: str) -> str:
-            worker_msgs = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": st},
-            ]
+            worker_env = SimulatedEnvironment()
+            sub_task = dict(task, instruction=st)
+            worker_msgs = self._build_initial_messages(sub_task, system_prompt, security_pipeline)
             worker_resp = call_model(self.model_name, worker_msgs) or ""
             with trace_lock:
                 trace.append({"role": "worker", "content": worker_resp})
 
             parsed = self._parse_tool_call(worker_resp)
             if parsed:
-                tc = self._try_tool_call(parsed, env, security_pipeline)
+                with pipeline_lock:
+                    tc = self._try_tool_call(parsed, worker_env, security_pipeline, task)
                 with tc_lock:
                     if tc.blocked:
                         blocked.append(tc)
                     else:
                         tool_calls.append(tc)
+                        if security_pipeline and hasattr(security_pipeline, "filter_context"):
+                            with pipeline_lock:
+                                security_pipeline.filter_context(
+                                    tc.result, source="tool_output")
+                # Merge worker history back into the primary env
+                with tc_lock:
+                    env.history.extend(worker_env.history)
             return worker_resp
 
         active_subtasks = subtasks[:max_subtasks]
@@ -79,7 +89,7 @@ class MapReduceHarness(BaseHarness):
                 "results into a single coherent final answer."
             )},
             {"role": "user", "content": (
-                f"Original task: {user_msg}\n\n"
+                f"Original task: {task['instruction']}\n\n"
                 + "\n---\n".join(
                     f"Sub-result {i+1}:\n{r}" for i, r in enumerate(sub_results)
                 )

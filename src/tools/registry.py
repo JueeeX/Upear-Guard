@@ -45,11 +45,9 @@ class CapabilityToken:
     signature: str = ""
 
     def is_valid(self) -> bool:
-        now = datetime.now(timezone.utc).isoformat()
-        return (
-            now < self.expires_at
-            and self.invocations_used < self.max_invocations
-        )
+        now = datetime.now(timezone.utc)
+        expires = datetime.fromisoformat(self.expires_at)
+        return now < expires and self.invocations_used < self.max_invocations
 
     def consume(self):
         self.invocations_used += 1
@@ -63,6 +61,15 @@ def _sign(payload: str) -> str:
 
 def verify_signature(tool: ToolSpec) -> bool:
     return hmac.compare_digest(tool.signature, _sign(tool.description))
+
+
+def verify_token_signature(token: CapabilityToken) -> bool:
+    expected = _sign(json.dumps({
+        "token_id": token.token_id,
+        "tool_name": token.tool_name,
+        "granted_to": token.granted_to,
+    }))
+    return hmac.compare_digest(token.signature, expected)
 
 
 class ToolRegistry:
@@ -89,8 +96,15 @@ class ToolRegistry:
         if max_risk_tier is None:
             return list(self._tools.values())
         cutoff = tier_order.index(max_risk_tier) if max_risk_tier in tier_order else len(tier_order)
-        return [t for t in self._tools.values()
-                if tier_order.index(t.risk_tier) <= cutoff]
+        result = []
+        for t in self._tools.values():
+            try:
+                t_idx = tier_order.index(t.risk_tier)
+            except ValueError:
+                continue
+            if t_idx <= cutoff:
+                result.append(t)
+        return result
 
     def descriptions_for_prompt(self, tool_names: list[str] | None = None) -> str:
         tools = (
@@ -145,6 +159,7 @@ def build_default_registry() -> ToolRegistry:
         ("make_appointment","Book a medical appointment with a doctor.",              "write",      {"doctor_id": "str", "time": "str"}),
         ("drop_database","Drop an entire database — DANGEROUS.",                      "destructive",{"db_name": "str"}),
         ("rm_rf",        "Recursively delete a directory — DANGEROUS.",               "destructive",{"path": "str"}),
+        ("format_disk",  "Format a disk partition — DANGEROUS.",                      "destructive",{"device": "str"}),
     ]
     for name, desc, tier, params in _defaults:
         reg.register(name, desc, tier, params)

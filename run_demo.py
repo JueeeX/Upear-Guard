@@ -33,8 +33,9 @@ from src.harness.direct import DirectHarness
 from src.harness.react import ReactHarness
 from src.harness.multi_agent import MultiAgentHarness
 from src.harness.map_reduce import MapReduceHarness
-from src.safety import SecurityPipeline, BoltOnPipeline
-from src.attacks import context_poisoning
+from src.safety import (SecurityPipeline, BoltOnPipeline,
+                        SystemPromptDefense, GuardrailPipeline)
+from src.attacks import context_poisoning, tool_tampering
 from src.evaluation import rule_checker, llm_judge
 from src.evaluation.metrics import compute_metrics
 
@@ -78,10 +79,15 @@ def load_config(path: str = "config/experiment.yaml") -> dict:
 
 def build_security_pipeline(mode: str, registry: ToolRegistry,
                             cfg: dict, judge_model: str):
+    safety_cfg = cfg.get("safety", {})
     if mode == "safe_harness":
-        return SecurityPipeline(registry, cfg.get("safety", {}), judge_model)
+        return SecurityPipeline(registry, safety_cfg, judge_model)
     if mode == "bolt_on":
-        return BoltOnPipeline(registry, cfg.get("safety", {}), judge_model)
+        return BoltOnPipeline(registry, safety_cfg, judge_model)
+    if mode == "system_prompt":
+        return SystemPromptDefense()
+    if mode == "guardrail":
+        return GuardrailPipeline(safety_cfg, judge_model)
     return None
 
 
@@ -92,12 +98,17 @@ def _run_job(job: Job, registry: ToolRegistry, cfg: dict,
     Each invocation creates its own mutable state (env, pipeline) so
     that jobs are fully independent and thread-safe.
     """
-    harness_cfg = {**cfg["harness"], "security_mode": job.security_mode}
-    harness = HARNESS_MAP[job.harness_type](model_name, registry, harness_cfg)
-    pipeline = build_security_pipeline(job.security_mode, registry, cfg, judge_model)
-    env = SimulatedEnvironment()
-
     task = job.attack_fn(job.task, seed=job.task["id"]) if job.attack_fn else job.task
+
+    active_registry = registry
+    if task.get("_tamper_registry"):
+        from src.attacks import tool_tampering
+        active_registry = tool_tampering.tamper_registry(registry)
+
+    harness_cfg = {**cfg["harness"], "security_mode": job.security_mode}
+    harness = HARNESS_MAP[job.harness_type](model_name, active_registry, harness_cfg)
+    pipeline = build_security_pipeline(job.security_mode, active_registry, cfg, judge_model)
+    env = SimulatedEnvironment()
 
     t0 = time.time()
     hr = harness.execute(task, env, pipeline)
@@ -190,8 +201,9 @@ def main():
 
     wall_time = time.time() - t_start
     serial_time = sum(r.elapsed_s for r in results)
+    speedup = serial_time / wall_time if wall_time > 0 else 0.0
     print(f"\n  Wall time: {wall_time:.1f}s  |  Sum of job times: {serial_time:.1f}s  "
-          f"|  Speedup: {serial_time / wall_time:.1f}x")
+          f"|  Speedup: {speedup:.1f}x")
 
     # ── 4. Aggregate metrics per (harness, security) ───────────
     print("\n[3/4] Summary Table")
@@ -281,6 +293,7 @@ def _records_to_metric_tuples(records: list[Record], tasks: list[dict]):
     from src.harness.base import HarnessResult
     from src.evaluation.llm_judge import JudgeResult
     from src.evaluation.rule_checker import RuleCheckResult
+    from src.tools.simulated_tools import ToolCall
 
     tuples = []
     task_map = {t["id"]: t for t in tasks}
@@ -288,10 +301,15 @@ def _records_to_metric_tuples(records: list[Record], tasks: list[dict]):
         task = task_map.get(r.task_id, {"id": r.task_id})
         if r.attack:
             task = dict(task, _attack=r.attack)
+        stub_blocked = [
+            ToolCall(tool_name="unknown", arguments={}, blocked=True,
+                     block_reason="reconstructed from record")
+            for _ in range(r.blocked_count)
+        ]
         hr = HarnessResult(
             task_id=r.task_id, harness_type=r.harness,
             security_mode=r.security_mode, final_response="",
-            blocked_actions=[None] * r.blocked_count,
+            blocked_actions=stub_blocked,
         )
         jr = JudgeResult(label=r.judge_label, reasoning=r.judge_reasoning)
         rr = RuleCheckResult(is_unsafe=r.rule_unsafe,

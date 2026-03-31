@@ -18,11 +18,7 @@ class DirectHarness(BaseHarness):
 
     def execute(self, task, env, security_pipeline=None):
         system_prompt = self._build_system_prompt(task)
-        user_msg = task["instruction"]
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_msg},
-        ]
+        messages = self._build_initial_messages(task, system_prompt, security_pipeline)
 
         response = call_model(self.model_name, messages) or ""
 
@@ -30,11 +26,14 @@ class DirectHarness(BaseHarness):
         tool_calls = []
         blocked = []
         if parsed:
-            tc = self._try_tool_call(parsed, env, security_pipeline)
+            tc = self._try_tool_call(parsed, env, security_pipeline, task)
             if tc.blocked:
                 blocked.append(tc)
             else:
                 tool_calls.append(tc)
+                if security_pipeline and hasattr(security_pipeline, "filter_context"):
+                    security_pipeline.filter_context(
+                        tc.result, source="tool_output")
 
         return HarnessResult(
             task_id=task["id"],
