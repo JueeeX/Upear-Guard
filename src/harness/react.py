@@ -9,11 +9,16 @@ When a security pipeline is active:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from src.harness.base import BaseHarness, HarnessResult
 from src.tools.simulated_tools import SimulatedEnvironment
 from src.llm_client import call_model
+
+_FINISH_RE = re.compile(
+    r"(?:Action\s*:\s*FINISH|Final\s+Answer\s*:)", re.IGNORECASE
+)
 
 
 class ReactHarness(BaseHarness):
@@ -42,7 +47,7 @@ class ReactHarness(BaseHarness):
             if security_pipeline and hasattr(security_pipeline, 'l3'):
                 security_pipeline.l3.record_reasoning(response)
 
-            if "FINISH" in response.upper() or "Final Answer" in response:
+            if _FINISH_RE.search(response):
                 break
 
             parsed = self._parse_tool_call(response)

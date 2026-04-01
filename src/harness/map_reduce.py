@@ -83,6 +83,15 @@ class MapReduceHarness(BaseHarness):
                 sub_results[idx] = future.result()
 
         # ── REDUCE: aggregate ──
+        # Filter each sub-result through L2 before aggregation to catch
+        # any poisoned content that slipped through worker-level checks.
+        filtered_sub_results = []
+        for r in sub_results:
+            if security_pipeline and hasattr(security_pipeline, "filter_context"):
+                with pipeline_lock:
+                    r = security_pipeline.filter_context(r, source="inter_agent")
+            filtered_sub_results.append(r)
+
         reduce_msgs = [
             {"role": "system", "content": (
                 "You are an aggregator. Combine the following sub-task "
@@ -91,7 +100,8 @@ class MapReduceHarness(BaseHarness):
             {"role": "user", "content": (
                 f"Original task: {task['instruction']}\n\n"
                 + "\n---\n".join(
-                    f"Sub-result {i+1}:\n{r}" for i, r in enumerate(sub_results)
+                    f"Sub-result {i+1}:\n{r}"
+                    for i, r in enumerate(filtered_sub_results)
                 )
             )},
         ]

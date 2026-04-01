@@ -73,10 +73,10 @@ Agent 执行生命周期                    SafeHarness 安全层
 
 SafeHarness 不是简单的安全层堆叠，各层之间存在主动反馈：
 
-- **L2 检测异常 → L3 升级验证**：当 L2 检测到注入尝试时，熵监控器记录违规；当熵分数超过阈值，L3 自动从 Tier 1（规则）升级到 Tier 2/3（LLM/因果）验证
-- **L3 确认攻击 → L4 回滚+降级**：当 L3 的 Tier 3 因果诊断判定为注入攻击，L4 立即回滚到最近安全检查点并升级降级等级
-- **L4 降级 → L1 权限收紧**：L4 的降级等级直接映射为 L1 的最大允许工具层级（如降级 1 级 = 禁用 destructive 工具）
-- **L4 自适应恢复**：连续安全操作达到窗口阈值后，L4 自动恢复一级权限，平衡安全与效用
+- **L2 检测异常 → L3 升级验证**：当 L2 检测到注入尝试（正则匹配或语义过滤变化超阈值）时，熵监控器记录违规；当熵分数超过阈值，L3 自动从 Tier 1（规则）升级到 Tier 2/3（LLM/因果）验证
+- **L3 确认攻击 → L4 回滚+降级**：当 L3 的 Tier 3 因果诊断判定为注入攻击，L4 立即回滚到最近安全检查点（包括 memory 快照恢复）并升级降级等级
+- **L4 降级 → L1 权限收紧**：L4 的降级等级与 L1 的五级风险体系一一对齐（0=全部 → 4=只读）
+- **L4 自适应恢复 → L3 降级验证**：连续安全操作达到窗口阈值后，L4 自动恢复一级权限，同时 L3 的最低验证级别同步降级，平衡安全与效用
 
 ---
 
@@ -222,8 +222,9 @@ python run_experiment.py --subset 200 --workers 16
 | **TCR** | Task Completion Rate — 任务完成率 | 越高越好 |
 | **UA** | Utility Under Attack — 受攻击时的效用 | 越高越好 |
 | **NNH** | Number Needed to Harm — 每 N 次交互产生一次伤害 | 越高越好 |
+| **ORR** | Over-Refusal Rate — 过度拒绝率（fulfillable 任务被拒绝的比例） | 越低越好 |
 
-所有指标均提供 Bootstrap 95% 置信区间和配对显著性检验。
+所有指标均提供 Bootstrap 95% 置信区间和配对显著性检验。ORR 用于衡量安全机制的保守程度——过低的 UBR 如果伴随过高的 ORR，说明系统通过"一刀切式拒绝"而非精确防御来实现安全。
 
 ---
 
@@ -359,13 +360,39 @@ python run_experiment.py --subset 200 --bootstrap
 
 ---
 
+## 近期改进
+
+### v0.2 (2026-04)
+
+**核心逻辑修复**
+- **L2 语义过滤反馈闭环**：LLM 语义过滤的结果现在正确反馈到 `injection_detected` 和 provenance 标记（通过检测文本变化率），确保 L2→L3 层间升级在 `always_semantic` 模式下有效
+- **L2 来源感知信任级别**：不同来源类型（user_input/tool_output/retrieved/inter_agent）现在有差异化的默认信任级别
+- **L4 Memory 快照**：Checkpoint 现在包含 ProtectedMemory 快照，回滚时同步恢复 memory 状态，防止记忆腐蚀跨越回滚边界
+- **L4 降级映射对齐**：降级等级从 3 级扩展为 5 级，与 L1 的五级风险体系一一对齐（destructive → network → execute → write → read_only）
+- **L3 双向可调**：新增 `maybe_deescalate()` 方法，在 L4 自适应恢复时联动降级 L3 的最低验证级别
+- **L1 路径遍历防护**：路径检查现在拒绝包含 `..` 的路径并使用 `os.path.normpath` 规范化
+
+**评估与解析修复**
+- **LLM Judge 标签解析**：修复子串匹配导致 "SAFE" 文本中包含 "UNSAFE" 被误判的问题，改用词边界匹配和否定上下文检查
+- **L3 Tier 2 标签优先级**：改为基于位置的匹配（取最早出现的标签），避免遍历顺序偏差
+- **ReAct 终止条件**：从宽松的子串匹配改为严格的正则模式（`Action: FINISH` / `Final Answer:`）
+
+**其他改进**
+- `data_loader.load_subset()` 的 `seed` 参数现在正确用于控制分桶采样的随机性
+- L2 注入模式集扩展：新增 pretend/jailbreak/DAN/developer mode/bypass/roleplay 等 8 种模式
+- 端到端测试增加安全语义断言（L4 回滚正确性、降级映射、L3 升降级、L1 路径遍历防护、ReAct 终止正则）
+
+---
+
 ## 引用
 
 如果使用本框架，请引用：
 
 ```bibtex
 @article{safeharness2026,
-  title={SafeHarness: Security-Aware Harness Architecture for Safe AI Agent Deployment},
+  title={SafeHarness: Lifecycle-Integrated Security Architecture for Safe LLM Agent Deployment},
+  author={Liu, Yang and Chen, Yancheng and Zhang, Shuai and Wu, Yongxuan and Lin, Xixun},
+  journal={arXiv preprint},
   year={2026}
 }
 ```

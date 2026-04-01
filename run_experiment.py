@@ -136,7 +136,9 @@ def _run_job(job: Job, registry: ToolRegistry, cfg: dict,
     t0 = time.time()
     hr = harness.execute(task, env, pipeline)
     rr = rule_checker.check(hr)
-    jr = llm_judge.evaluate(hr, task, judge_model=judge_model)
+    judge_temp = cfg.get("evaluation", {}).get("llm_judge", {}).get("temperature")
+    jr = llm_judge.evaluate(hr, task, judge_model=judge_model,
+                            temperature=judge_temp)
     elapsed = time.time() - t0
 
     return Record(
@@ -213,9 +215,18 @@ def main():
     _print_metrics_table(results, agent_models, harness_types,
                          security_modes, tasks)
 
-    # ── Bootstrap CIs ──────────────────────────────────────────
+    # ── Per-attack breakdown ──────────────────────────────────
+    _print_per_attack_table(results, agent_models, harness_types,
+                            security_modes, attack_types, tasks)
+
+    # ── Per-risk-category breakdown ─────────────────────────────
+    _print_per_category(results, tasks)
+
+    # ── Bootstrap CIs + paired significance tests ─────────────
     if args.bootstrap:
         _print_bootstrap_cis(results, tasks, cfg)
+        _print_paired_tests(results, agent_models, harness_types,
+                            security_modes, tasks, cfg)
 
     # ── Save ───────────────────────────────────────────────────
     _save_results(results, output_dir / "experiment_results.json", cfg)
@@ -230,9 +241,10 @@ def _run_ablation(cfg, output_dir, max_workers):
 
     registry = build_default_registry()
     judge_model = cfg["models"]["judge_model"]
+    # Single agent model to keep ablation cost manageable
     agent_model = cfg["models"]["agent_models"][0]
     harness_types = abl_cfg.get("harness_types", ["react", "multi_agent"])
-    attack_types = ["context_poisoning", "indirect_injection", "tool_tampering"]
+    attack_types = cfg.get("attacks", {}).get("types", list(ATTACK_MAP.keys()))
     configs = abl_cfg.get("configs", [{"name": "full", "disable_layers": []}])
 
     jobs: list[Job] = []
@@ -317,6 +329,42 @@ def _print_metrics_table(results, agent_models, harness_types,
                 print(f"  {m}")
 
 
+def _print_per_attack_table(results, agent_models, harness_types,
+                            security_modes, attack_types, tasks):
+    """Print a breakdown of UBR / ASR per attack type."""
+    print("\n  Per-Attack Breakdown:")
+    print("-" * 100)
+    conditions = ["clean"] + list(attack_types)
+    hdr = f"{'Model':<14} {'Harness':<12} {'Security':<14} " + " ".join(
+        f"{c[:12]:>12}" for c in conditions)
+    print(hdr)
+    print("-" * 100)
+    for model_name in agent_models:
+        for h_type in harness_types:
+            for s_mode in security_modes:
+                parts = []
+                for cond in conditions:
+                    if cond == "clean":
+                        group = [r for r in results
+                                 if r.model == model_name
+                                 and r.harness == h_type
+                                 and r.security_mode == s_mode
+                                 and r.attack is None]
+                    else:
+                        group = [r for r in results
+                                 if r.model == model_name
+                                 and r.harness == h_type
+                                 and r.security_mode == s_mode
+                                 and r.attack == cond]
+                    batch = _to_metric_tuples(group, tasks)
+                    m = compute_metrics(batch)
+                    parts.append(f"{m.ubr:>5.1%}/{m.asr:>5.1%}")
+                print(f"{model_name:<14} {h_type:<12} {s_mode:<14} "
+                      + " ".join(f"{p:>12}" for p in parts))
+    print("-" * 100)
+    print("  (Format: UBR / ASR per attack condition)\n")
+
+
 def _print_bootstrap_cis(results, tasks, cfg):
     from src.evaluation.statistics import compute_all_cis
     n_boot = cfg.get("evaluation", {}).get("bootstrap_samples", 1000)
@@ -337,6 +385,63 @@ def _print_bootstrap_cis(results, tasks, cfg):
                 print(f"  {model}/{h_type}/{s_mode}:")
                 for ci in cis:
                     print(f"    {ci}")
+    print("-" * 80)
+
+
+def _print_per_category(results, tasks):
+    """Print metrics broken down by risk category."""
+    from src.evaluation.statistics import per_category_metrics
+    all_batch = _to_metric_tuples(results, tasks)
+    cat_metrics = per_category_metrics(all_batch)
+    if not cat_metrics:
+        return
+    print("\n  Per-Risk-Category Breakdown:")
+    print("-" * 80)
+    print(f"  {'Category':<30} {'UBR':>8} {'ASR':>8} {'TCR':>8} {'N':>6}")
+    print("-" * 80)
+    for cat, m in sorted(cat_metrics.items()):
+        print(f"  {cat:<30} {m.ubr:>8.2%} {m.asr:>8.2%} "
+              f"{m.tcr:>8.2%} {m.total:>6}")
+    print("-" * 80)
+
+
+def _print_paired_tests(results, agent_models, harness_types,
+                        security_modes, tasks, cfg):
+    """Run paired bootstrap tests: SafeHarness vs each baseline."""
+    from src.evaluation.statistics import paired_bootstrap_test
+    n_boot = cfg.get("evaluation", {}).get("bootstrap_samples", 1000)
+
+    print("\n  Paired Bootstrap Significance Tests (SafeHarness vs baselines):")
+    print("-" * 80)
+    for model in agent_models:
+        for h_type in harness_types:
+            sh_group = [r for r in results
+                        if r.model == model and r.harness == h_type
+                        and r.security_mode == "safe_harness"]
+            sh_batch = _to_metric_tuples(sh_group, tasks)
+            if not sh_batch:
+                continue
+            for s_mode in security_modes:
+                if s_mode == "safe_harness":
+                    continue
+                bl_group = [r for r in results
+                            if r.model == model and r.harness == h_type
+                            and r.security_mode == s_mode]
+                bl_batch = _to_metric_tuples(bl_group, tasks)
+                if not bl_batch:
+                    continue
+                for metric_name, metric_fn in [
+                    ("UBR", lambda m: m.ubr),
+                    ("ASR", lambda m: m.asr),
+                ]:
+                    test = paired_bootstrap_test(
+                        sh_batch, bl_batch, metric_fn,
+                        n_bootstrap=n_boot,
+                        metric_name=metric_name,
+                        config_a="SafeHarness",
+                        config_b=s_mode,
+                    )
+                    print(f"  {model}/{h_type}: {test}")
     print("-" * 80)
 
 

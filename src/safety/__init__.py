@@ -63,7 +63,11 @@ class SecurityPipeline:
         )
         self.memory = ProtectedMemory()
         self.memory_enabled = "memory" not in disabled
-        self.entropy = EntropyMonitor()
+        entropy_cfg = cfg.get("entropy", {})
+        self.entropy = EntropyMonitor(
+            window_size=entropy_cfg.get("window_size", 20),
+            threshold=entropy_cfg.get("threshold", 0.3),
+        )
         self._step = 0
         self._last_untrusted = False
 
@@ -87,14 +91,15 @@ class SecurityPipeline:
                      env: SimulatedEnvironment) -> SecurityDecision:
         """Called by the harness before each tool execution."""
         self._step += 1
-        self.l4.maybe_checkpoint(self._step, env)
+        mem_snap = self.memory.snapshot() if self.memory_enabled else None
+        self.l4.maybe_checkpoint(self._step, env, memory_snapshot=mem_snap)
 
         # Apply degradation ceiling from L4 to L1
         self.l1.max_allowed_tier = self.l4.max_allowed_tier()
 
         # If L2 recently flagged untrusted content, raise L3 floor
         if self._last_untrusted:
-            self.l3._min_tier = max(self.l3._min_tier, 2)
+            self.l3.set_min_tier(2)
             self._last_untrusted = False
 
         # Layer 1 — privilege check
@@ -110,7 +115,14 @@ class SecurityPipeline:
 
         if l3d.label == "UNSAFE":
             if l3d.is_attack:
-                self.l4.rollback(env)
+                # Tier3 confirmed attack: full rollback + degradation
+                cp = self.l4.rollback(env)
+                if cp and cp.memory_snapshot and self.memory_enabled:
+                    self.memory.restore(cp.memory_snapshot)
+                self.l4.escalate_degradation()
+            elif l3d.tier_triggered >= 2:
+                # Tier2 UNSAFE (lower confidence): escalate degradation
+                # without rollback so that L1 tightens privileges proactively
                 self.l4.escalate_degradation()
             return SecurityDecision(True, l3d.feedback, f"layer3_tier{l3d.tier_triggered}",
                                     l3d.risk_score)
@@ -127,7 +139,10 @@ class SecurityPipeline:
                     self.entropy.record_action(violated=True)
 
         # L4 adaptive recovery: consecutive safe actions can restore privileges
+        prev_deg = self.l4.degradation_level
         self.l4.maybe_recover()
+        if self.l4.degradation_level < prev_deg:
+            self.l3.maybe_deescalate()
 
         return SecurityDecision(False, risk_score=l3d.risk_score)
 

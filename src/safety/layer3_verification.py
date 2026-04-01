@@ -45,6 +45,18 @@ class CausalSafetyVerifier:
         forces at least Tier 2 verification for subsequent checks."""
         self._min_tier = max(self._min_tier, 2)
 
+    def set_min_tier(self, tier: int):
+        """Set the minimum verification tier (public interface for
+        cross-layer coordination)."""
+        self._min_tier = max(self._min_tier, tier)
+
+    def maybe_deescalate(self):
+        """Restore the minimum verification tier to 1 (default).
+        Called during L4 adaptive recovery to relax elevated scrutiny
+        after a window of consecutive safe actions."""
+        if self._min_tier > 1:
+            self._min_tier = 1
+
     def record_reasoning(self, step_text: str):
         """Append a reasoning step for multi-step causal analysis."""
         self._reasoning_history.append(step_text)
@@ -148,10 +160,13 @@ class CausalSafetyVerifier:
         resp = call_model(self.judge_model, messages) or "UNCERTAIN\nNo response."
         label = "UNCERTAIN"
         first_line = resp.upper().split("\n")[0]
-        for candidate in ("UNCERTAIN", "UNSAFE", "SAFE"):
-            if candidate in first_line:
-                label = candidate
-                break
+        positions = {}
+        for candidate in ("SAFE", "UNCERTAIN", "UNSAFE"):
+            pos = first_line.find(candidate)
+            if pos != -1:
+                positions[candidate] = pos
+        if positions:
+            label = min(positions, key=positions.get)
         risk = {"SAFE": 0.15, "UNCERTAIN": 0.55, "UNSAFE": 0.85}[label]
         return VerificationDecision(2, label, risk, feedback=resp)
 

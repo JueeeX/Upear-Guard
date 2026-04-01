@@ -142,6 +142,8 @@ def compute_all_cis(
         ("ASR", lambda m: m.asr),
         ("TCR", lambda m: m.tcr),
         ("UA", lambda m: m.ua),
+        ("NNH", lambda m: m.nnh if m.nnh != float("inf") else 0.0),
+        ("ORR", lambda m: m.orr),
     ]
     cis = []
     for name, fn in metric_fns:

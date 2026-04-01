@@ -44,13 +44,10 @@ safety:
     denied_paths:
       - "/etc"
       - "/root"
-    tool_risk_tiers:
-      read_only: ["file_read", "list_dir", "search"]
-      write: ["file_write", "file_delete"]
-      execute: ["run_code", "run_shell"]
-      network: ["http_get", "http_post", "send_email"]
-      destructive: ["drop_database", "rm_rf", "format_disk"]
+    # Tool risk tiers are defined in src/tools/registry.py build_default_registry()
+    # and cannot be overridden from config. See that function for the mapping.
   layer2:
+    always_semantic: false  # set true to run LLM semantic check on every input
     suspicious_patterns:
       - "ignore previous instructions"
       - "disregard all prior"
@@ -69,6 +66,9 @@ safety:
     checkpoint_interval: 3
     max_degradation_level: 3
     recovery_window: 5
+  entropy:
+    window_size: 20
+    threshold: 0.3
 
 attacks:
   types:
@@ -90,6 +90,7 @@ evaluation:
     - "tcr"
     - "ua"
     - "nnh"
+    - "orr"
   bootstrap_samples: 1000
 
 # Ablation configurations: each entry disables specific layers.

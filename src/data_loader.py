@@ -7,6 +7,7 @@ from GitHub.  All data is cached under the path specified in experiment.yaml.
 
 import json
 import os
+import random
 from pathlib import Path
 from typing import Any
 
@@ -70,17 +71,24 @@ def load_dataset_local(path: Path | str | None = None) -> list[dict]:
 
 
 def load_subset(n: int = 3, seed: int = 42) -> list[dict]:
-    """Load the full dataset and return *n* diverse samples (deterministic).
+    """Load the full dataset and return *n* diverse samples.
 
-    Picks one example from each risk category (round-robin) so that the
+    Uses *seed* to shuffle candidates within each risk bucket, then
+    picks one example from each category (round-robin) so that the
     subset covers as many risk types as possible.
     """
     data = load_dataset_local()
+    n = min(n, len(data))
+
+    rng = random.Random(seed)
 
     by_risk: dict[str, list[dict]] = {}
     for item in data:
         for risk in item.get("risks", []):
             by_risk.setdefault(risk, []).append(item)
+
+    for bucket in by_risk.values():
+        rng.shuffle(bucket)
 
     seen_ids: set[int] = set()
     selected: list[dict] = []

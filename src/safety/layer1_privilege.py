@@ -9,6 +9,7 @@ Enforces platform-level access control:
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -94,8 +95,14 @@ class PrivilegeSeparationLayer:
         denied_paths = self.config.get("denied_paths", [])
         path_arg = arguments.get("path", "")
         if path_arg:
+            if ".." in path_arg:
+                return L1Decision(
+                    False,
+                    f"Path '{path_arg}' contains traversal components.")
+            normalised = os.path.normpath(path_arg)
             for dp in denied_paths:
-                if path_arg.startswith(dp):
+                dp_norm = os.path.normpath(dp)
+                if normalised == dp_norm or normalised.startswith(dp_norm + os.sep):
                     return L1Decision(False,
                                       f"Path '{path_arg}' is in the deny-list.")
 

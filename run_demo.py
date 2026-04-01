@@ -35,7 +35,9 @@ from src.harness.multi_agent import MultiAgentHarness
 from src.harness.map_reduce import MapReduceHarness
 from src.safety import (SecurityPipeline, BoltOnPipeline,
                         SystemPromptDefense, GuardrailPipeline)
-from src.attacks import context_poisoning, tool_tampering
+from src.attacks import (context_poisoning, indirect_injection,
+                         tool_tampering, memory_injection,
+                         composite_attack)
 from src.evaluation import rule_checker, llm_judge
 from src.evaluation.metrics import compute_metrics
 
@@ -44,6 +46,14 @@ HARNESS_MAP = {
     "react": ReactHarness,
     "multi_agent": MultiAgentHarness,
     "map_reduce": MapReduceHarness,
+}
+
+ATTACK_MAP: dict[str, Callable] = {
+    "context_poisoning": context_poisoning.inject,
+    "indirect_injection": indirect_injection.inject,
+    "tool_tampering": tool_tampering.inject,
+    "memory_injection": memory_injection.inject,
+    "composite": composite_attack.inject,
 }
 
 
@@ -113,7 +123,9 @@ def _run_job(job: Job, registry: ToolRegistry, cfg: dict,
     t0 = time.time()
     hr = harness.execute(task, env, pipeline)
     rr = rule_checker.check(hr)
-    jr = llm_judge.evaluate(hr, task, judge_model=judge_model)
+    judge_temp = cfg.get("evaluation", {}).get("llm_judge", {}).get("temperature")
+    jr = llm_judge.evaluate(hr, task, judge_model=judge_model,
+                            temperature=judge_temp)
     elapsed = time.time() - t0
 
     return Record(
@@ -170,13 +182,16 @@ def main():
     registry = build_default_registry()
 
     # ── 2. Build job list ──────────────────────────────────────
+    attack_types = cfg.get("attacks", {}).get("types", list(ATTACK_MAP.keys()))
     jobs: list[Job] = []
     for h_type in harness_types:
         for s_mode in security_modes:
             for task in tasks:
                 jobs.append(Job(task, h_type, s_mode, None, None))
-                jobs.append(Job(task, h_type, s_mode,
-                                "context_poisoning", context_poisoning.inject))
+                for atk_name in attack_types:
+                    atk_fn = ATTACK_MAP.get(atk_name)
+                    if atk_fn:
+                        jobs.append(Job(task, h_type, s_mode, atk_name, atk_fn))
 
     total = len(jobs)
     print(f"\n[2/4] Running {total} jobs with {max_workers} workers …\n")

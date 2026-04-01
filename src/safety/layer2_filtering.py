@@ -43,6 +43,7 @@ class AdversarialContextFilter:
         self.config = config or {}
         self.judge_model = judge_model
         self.enabled = enabled
+        self.always_semantic: bool = self.config.get("always_semantic", False)
         self._patterns: list[re.Pattern] = [
             re.compile(p, re.IGNORECASE)
             for p in self.config.get("suspicious_patterns", [
@@ -56,12 +57,30 @@ class AdversarialContextFilter:
                 r"new role",
                 r"override.*(?:policy|instruction)",
                 r"act as.*(?:admin|root|sudo)",
+                r"pretend you are",
+                r"jailbreak",
+                r"do anything now",
+                r"developer mode",
+                r"\bDAN\b",
+                r"ignore all safety",
+                r"bypass.*(?:filter|restriction|guardrail)",
+                r"roleplay as.*(?:evil|malicious|unfiltered)",
             ])
         ]
 
+    _SOURCE_TRUST_DEFAULTS: dict[str, str] = {
+        "user_input": "medium",
+        "tool_output": "low",
+        "retrieved": "low",
+        "inter_agent": "medium",
+    }
+
+    _SEMANTIC_CHANGE_THRESHOLD: float = 0.15
+
     def filter(self, text: str,
                source_type: str = "user_input") -> FilteredContent:
-        prov = ProvenanceTag(source_type=source_type)
+        default_trust = self._SOURCE_TRUST_DEFAULTS.get(source_type, "low")
+        prov = ProvenanceTag(source_type=source_type, trust_level=default_trust)
 
         if not self.enabled:
             prov.sanitised = False
@@ -73,16 +92,26 @@ class AdversarialContextFilter:
         # Stage 2 — pattern-based detection (fast path)
         injection_hit = any(p.search(cleaned) for p in self._patterns)
 
-        # Stage 2b — if patterns matched, optionally confirm via LLM
-        if injection_hit and self.judge_model:
+        # Stage 2b — LLM semantic filtering.
+        # When always_semantic is enabled, every input goes through the
+        # LLM filter even if no regex pattern matched, catching stealthy
+        # injections that bypass pattern heuristics.
+        semantic_hit = False
+        if self.judge_model and (injection_hit or self.always_semantic):
+            pre_semantic = cleaned
             cleaned = self._semantic_sanitise(cleaned)
+            if pre_semantic and cleaned != pre_semantic:
+                change_ratio = 1.0 - len(cleaned) / len(pre_semantic)
+                if change_ratio > self._SEMANTIC_CHANGE_THRESHOLD:
+                    semantic_hit = True
 
+        injection_detected = injection_hit or semantic_hit
         prov.sanitised = True
-        prov.trust_level = "untrusted" if injection_hit else "medium"
+        prov.trust_level = "untrusted" if injection_detected else default_trust
 
         return FilteredContent(
             original=text, cleaned=cleaned,
-            provenance=prov, injection_detected=injection_hit,
+            provenance=prov, injection_detected=injection_detected,
         )
 
     # ── Stage 1 helpers ─────────────────────────────────────────

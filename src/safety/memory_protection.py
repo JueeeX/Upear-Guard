@@ -3,12 +3,13 @@ Cross-Layer — Memory Protection & Entropy Monitoring
 
   * Provenance-tagged persistent memory
   * Anomaly detection on memory writes
-  * Entropy drift scoring
+  * Sliding-window entropy drift scoring
 """
 
 from __future__ import annotations
 
 import hashlib
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -30,6 +31,12 @@ class MemoryEntry:
             self.hash = hashlib.sha256(self.value.encode()).hexdigest()[:16]
 
 
+@dataclass
+class MemorySnapshot:
+    store: dict[str, MemoryEntry]
+    history_length: int
+
+
 class ProtectedMemory:
     """Append-only memory store with provenance tracking."""
 
@@ -47,6 +54,18 @@ class ProtectedMemory:
 
     def read(self, key: str) -> MemoryEntry | None:
         return self._store.get(key)
+
+    def snapshot(self) -> MemorySnapshot:
+        """Capture current memory state for checkpoint/rollback."""
+        return MemorySnapshot(
+            store=dict(self._store),
+            history_length=len(self._history),
+        )
+
+    def restore(self, snap: MemorySnapshot):
+        """Restore memory to a previous snapshot, discarding later writes."""
+        self._store = dict(snap.store)
+        self._history = self._history[:snap.history_length]
 
     def detect_anomalies(self) -> list[str]:
         """Simple anomaly checks on the memory history."""
@@ -74,21 +93,28 @@ class ProtectedMemory:
 
 
 class EntropyMonitor:
-    """Tracks coarse entropy metrics over the execution lifetime."""
+    """Sliding-window entropy monitor that tracks the violation rate
+    over the most recent *window_size* actions, making it sensitive
+    to short-term bursts of anomalous activity."""
 
-    def __init__(self):
-        self.constraint_violations = 0
+    def __init__(self, window_size: int = 20, threshold: float = 0.3):
+        self._window: deque[bool] = deque(maxlen=window_size)
+        self._threshold = threshold
         self.total_actions = 0
+        self.constraint_violations = 0
 
     def record_action(self, violated: bool = False):
         self.total_actions += 1
         if violated:
             self.constraint_violations += 1
+        self._window.append(violated)
 
     def entropy_score(self) -> float:
-        if self.total_actions == 0:
+        """Violation rate within the sliding window."""
+        if not self._window:
             return 0.0
-        return self.constraint_violations / self.total_actions
+        return sum(self._window) / len(self._window)
 
-    def is_drifting(self, threshold: float = 0.3) -> bool:
-        return self.entropy_score() > threshold
+    def is_drifting(self, threshold: float | None = None) -> bool:
+        return self.entropy_score() > (threshold if threshold is not None
+                                       else self._threshold)
