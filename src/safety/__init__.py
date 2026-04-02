@@ -147,10 +147,11 @@ class SecurityPipeline:
         return SecurityDecision(False, risk_score=l3d.risk_score)
 
 
-class BoltOnPipeline:
-    """Enhanced bolt-on defence: pattern matching + rule engine + optional
-    LLM guardrail.  Represents the 'external safety module' baseline
-    that is NOT integrated with the harness architecture."""
+class LlamaFirewallPipeline:
+    """Pipeline-level defense modeled after LlamaFirewall (Meta, 2025):
+    PromptGuard-style pattern detection (L2) + AlignmentCheck-style LLM
+    reasoning audit (L3).  Operates independently of harness-internal
+    state — no privilege management, rollback, or cross-layer feedback."""
 
     def __init__(self, registry: ToolRegistry,
                  config: dict[str, Any] | None = None,
@@ -168,8 +169,11 @@ class BoltOnPipeline:
                      env: SimulatedEnvironment) -> SecurityDecision:
         v = self.l3.verify(tool_name, arguments)
         if v.label == "UNSAFE":
-            return SecurityDecision(True, v.feedback, "bolt_on")
+            return SecurityDecision(True, v.feedback, "llamafirewall")
         return SecurityDecision(False, risk_score=v.risk_score)
+
+
+BoltOnPipeline = LlamaFirewallPipeline
 
 
 class SystemPromptDefense:

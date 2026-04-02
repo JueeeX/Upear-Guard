@@ -17,12 +17,12 @@ import numpy as np
 
 SECURITY_COLORS = {
     "unprotected": "#E74C3C",
-    "bolt_on":     "#3498DB",
+    "llamafirewall": "#3498DB",
     "safe_harness":"#2ECC71",
 }
 SECURITY_LABELS = {
     "unprotected": "Unprotected",
-    "bolt_on":     "Bolt-on",
+    "llamafirewall": "LlamaFirewall",
     "safe_harness":"SafeHarness",
 }
 HARNESS_ORDER = ["direct", "react", "multi_agent", "map_reduce"]
@@ -32,7 +32,7 @@ HARNESS_LABELS = {
     "multi_agent": "Multi-Agent",
     "map_reduce":  "Map-Reduce",
 }
-SECURITY_ORDER = ["unprotected", "bolt_on", "safe_harness"]
+SECURITY_ORDER = ["unprotected", "llamafirewall", "safe_harness"]
 
 ATTACK_COLORS = {
     "clean":             "#95A5A6",

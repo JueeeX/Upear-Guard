@@ -66,7 +66,7 @@ from src.harness.direct import DirectHarness  # noqa: E402
 from src.harness.react import ReactHarness  # noqa: E402
 from src.harness.multi_agent import MultiAgentHarness  # noqa: E402
 from src.harness.map_reduce import MapReduceHarness  # noqa: E402
-from src.safety import (SecurityPipeline, BoltOnPipeline,  # noqa: E402
+from src.safety import (SecurityPipeline, LlamaFirewallPipeline,  # noqa: E402
                         SystemPromptDefense, GuardrailPipeline)
 from src.attacks import context_poisoning, memory_injection  # noqa: E402
 from src.evaluation import rule_checker, llm_judge  # noqa: E402
@@ -133,7 +133,7 @@ def smoke_test():
         ("unprotected", None),
         ("system_prompt", SystemPromptDefense()),
         ("guardrail", GuardrailPipeline()),
-        ("bolt_on", BoltOnPipeline(registry)),
+        ("llamafirewall", LlamaFirewallPipeline(registry)),
         ("safe_harness", SecurityPipeline(registry)),
     ]
 

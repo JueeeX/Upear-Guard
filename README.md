@@ -101,7 +101,7 @@ SafeHarness/
 │   │   ├── multi_agent.py       # Multi-Agent + Critic（含 L2 observation 过滤）
 │   │   └── map_reduce.py        # Map-Reduce 任务委托（含 L2 observation 过滤）
 │   ├── safety/
-│   │   ├── __init__.py          # SecurityPipeline / BoltOnPipeline /
+│   │   ├── __init__.py          # SecurityPipeline / LlamaFirewallPipeline /
 │   │   │                        # SystemPromptDefense / GuardrailPipeline
 │   │   ├── layer1_privilege.py  # Layer 1: 特权分离 + 能力令牌
 │   │   ├── layer2_filtering.py  # Layer 2: 对抗性上下文过滤
@@ -175,7 +175,7 @@ python run_experiment.py --subset 200 --workers 16
 | 维度 | 选项 |
 |------|------|
 | **Harness 配置** | Direct API · ReAct · Multi-Agent+Critic · Map-Reduce |
-| **安全模式** | Unprotected · System-Prompt · Guardrail · Bolt-On · SafeHarness |
+| **安全模式** | Unprotected · System-Prompt · Guardrail · LlamaFirewall · SafeHarness |
 | **攻击类型** | Clean · Context Poisoning · Indirect Injection · Tool Tampering · Memory Injection · Composite |
 | **Agent 模型** | DeepSeek-Chat · GPT-4o（另可扩展） |
 | **Judge 模型** | GPT-4o（固定，与 Agent 模型分离） |
@@ -187,7 +187,7 @@ python run_experiment.py --subset 200 --workers 16
 | **Unprotected** | 无 | 完全无保护 |
 | **System-Prompt** | 系统提示中追加安全指令 | 纯依赖 LLM 遵从性，无强制执行 |
 | **Guardrail** | 独立的输入过滤 + 输出检测 | 无 Harness 状态感知，无权限控制 |
-| **Bolt-On** | L2 模式匹配 + L3 规则/LLM 检查 | 无权限分级、无状态回滚、无层间反馈 |
+| **LlamaFirewall** | PromptGuard-style 模式检测 + AlignmentCheck-style LLM 推理审计 | 无权限分级、无状态回滚、无层间反馈 |
 | **SafeHarness** | 完整四层 + 跨层记忆保护 + 层间反馈 | 我们的方案 |
 
 ### 攻击类型说明
@@ -270,7 +270,7 @@ python run_experiment.py --subset 200 --workers 16
 |------|------|--------|
 | 任务数 | 200 | Agent-SafetyBench 分层采样 |
 | Harness | 4 | Direct, ReAct, Multi-Agent, Map-Reduce |
-| Security Mode | 5 | Unprotected, System-Prompt, Guardrail, Bolt-On, SafeHarness |
+| Security Mode | 5 | Unprotected, System-Prompt, Guardrail, LlamaFirewall, SafeHarness |
 | Attack Condition | 6 | Clean + A1-A5 |
 | Agent Model | 2 | DeepSeek-Chat, GPT-4o |
 
@@ -348,7 +348,7 @@ python run_experiment.py --subset 200 --security safe_harness
 
 # 仅 baseline 对比（clean + A1 + A5）
 python run_experiment.py --subset 200 \
-  --security unprotected system_prompt guardrail bolt_on \
+  --security unprotected system_prompt guardrail llamafirewall \
   --attacks clean context_poisoning composite
 
 # 消融实验

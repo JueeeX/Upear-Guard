@@ -34,7 +34,7 @@ security_modes:
   - "unprotected"
   - "system_prompt"
   - "guardrail"
-  - "bolt_on"
+  - "llamafirewall"
   - "safe_harness"
 
 safety:

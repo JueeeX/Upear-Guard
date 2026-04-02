@@ -41,7 +41,7 @@ from src.harness.direct import DirectHarness
 from src.harness.react import ReactHarness
 from src.harness.multi_agent import MultiAgentHarness
 from src.harness.map_reduce import MapReduceHarness
-from src.safety import (SecurityPipeline, BoltOnPipeline,
+from src.safety import (SecurityPipeline, LlamaFirewallPipeline,
                         SystemPromptDefense, GuardrailPipeline)
 from src.attacks import (context_poisoning, tool_tampering,
                          memory_injection, indirect_injection,
@@ -107,8 +107,8 @@ def build_security_pipeline(mode, registry, config, judge_model,
 
     if mode == "safe_harness":
         return SecurityPipeline(registry, cfg, judge_model)
-    if mode == "bolt_on":
-        return BoltOnPipeline(registry, cfg, judge_model)
+    if mode == "llamafirewall":
+        return LlamaFirewallPipeline(registry, cfg, judge_model)
     if mode == "system_prompt":
         return SystemPromptDefense()
     if mode == "guardrail":
