@@ -26,9 +26,12 @@ harness:
     - "react"
     - "multi_agent"
     - "map_reduce"
+    - "memory"
   react_max_steps: 5
   multi_agent_max_revisions: 2
   map_reduce_max_subtasks: 3
+  memory_max_steps: 5
+  memory_working_capacity: 5
 
 security_modes:
   - "unprotected"

@@ -27,9 +27,12 @@ import llm_api  # noqa: E402
 _CALL_COUNT = 0
 
 
+_MEMORY_STEP = 0
+
+
 def _mock_llm(messages, **_kw):
     """Return a plausible fixed response for any LLM call."""
-    global _CALL_COUNT
+    global _CALL_COUNT, _MEMORY_STEP
     _CALL_COUNT += 1
     last_user = ""
     for m in reversed(messages):
@@ -49,6 +52,27 @@ def _mock_llm(messages, **_kw):
         return "Here is the combined result from sub-tasks."
     if "critic" in str(messages).lower():
         return "APPROVE\nThe response looks safe and correct."
+
+    # MemoryHarness: cycle through memory_store → env tool → FINISH
+    sys_content = messages[0]["content"] if messages else ""
+    if "memory_store" in sys_content and "WORKING MEMORY" in sys_content:
+        if "Observation:" not in last_user:
+            _MEMORY_STEP = 0
+        _MEMORY_STEP += 1
+        if _MEMORY_STEP == 1:
+            return ('Thought: I should store the task objective.\n'
+                    'Action: {"tool": "memory_store", '
+                    '"arguments": {"content": "Need to read a file"}}')
+        if _MEMORY_STEP == 2:
+            return ('Thought: Now retrieve relevant memories.\n'
+                    'Action: {"tool": "memory_retrieve", '
+                    '"arguments": {"query": "file"}}')
+        if _MEMORY_STEP == 3:
+            return ('Thought: Let me read the file.\n'
+                    'Action: {"tool": "file_read", '
+                    '"arguments": {"path": "/tmp/test.txt"}}')
+        return "Thought: Done.\nAction: FINISH\nFinal Answer: Task complete."
+
     return '{"tool": "file_read", "arguments": {"path": "/tmp/test.txt"}}'
 
 
@@ -66,6 +90,7 @@ from src.harness.direct import DirectHarness  # noqa: E402
 from src.harness.react import ReactHarness  # noqa: E402
 from src.harness.multi_agent import MultiAgentHarness  # noqa: E402
 from src.harness.map_reduce import MapReduceHarness  # noqa: E402
+from src.harness.memory import MemoryHarness  # noqa: E402
 from src.safety import (SecurityPipeline, LlamaFirewallPipeline,  # noqa: E402
                         SystemPromptDefense, GuardrailPipeline)
 from src.attacks import context_poisoning, memory_injection  # noqa: E402
@@ -120,6 +145,8 @@ def smoke_test():
         "react_max_steps": 3,
         "multi_agent_max_revisions": 1,
         "map_reduce_max_subtasks": 2,
+        "memory_max_steps": 5,
+        "memory_working_capacity": 5,
     }
 
     harnesses = [
@@ -127,6 +154,7 @@ def smoke_test():
         (ReactHarness, "react"),
         (MultiAgentHarness, "multi_agent"),
         (MapReduceHarness, "map_reduce"),
+        (MemoryHarness, "memory"),
     ]
 
     security_configs = [

@@ -41,6 +41,7 @@ from src.harness.direct import DirectHarness
 from src.harness.react import ReactHarness
 from src.harness.multi_agent import MultiAgentHarness
 from src.harness.map_reduce import MapReduceHarness
+from src.harness.memory import MemoryHarness
 from src.safety import (SecurityPipeline, LlamaFirewallPipeline,
                         SystemPromptDefense, GuardrailPipeline)
 from src.attacks import (context_poisoning, tool_tampering,
@@ -54,6 +55,7 @@ HARNESS_MAP = {
     "react": ReactHarness,
     "multi_agent": MultiAgentHarness,
     "map_reduce": MapReduceHarness,
+    "memory": MemoryHarness,
 }
 
 ATTACK_MAP: dict[str, Callable] = {

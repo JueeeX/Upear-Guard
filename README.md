@@ -94,12 +94,17 @@ SafeHarness/
 │   ├── tools/
 │   │   ├── registry.py          # 工具注册、HMAC 签名、风险分级、能力令牌
 │   │   └── simulated_tools.py   # 模拟工具执行环境
+│   ├── memory/
+│   │   ├── __init__.py          # 记忆模块入口
+│   │   ├── working_memory.py    # 工作记忆（固定容量 FIFO，注入 system prompt）
+│   │   └── archival_memory.py   # 档案记忆（无限容量，关键词检索）
 │   ├── harness/
 │   │   ├── base.py              # 抽象基类 & HarnessResult & L2 输入过滤
 │   │   ├── direct.py            # Direct API（含 L2 observation 过滤）
 │   │   ├── react.py             # ReAct 推理循环（含 L2 observation 过滤）
 │   │   ├── multi_agent.py       # Multi-Agent + Critic（含 L2 observation 过滤）
-│   │   └── map_reduce.py        # Map-Reduce 任务委托（含 L2 observation 过滤）
+│   │   ├── map_reduce.py        # Map-Reduce 任务委托（含 L2 observation 过滤）
+│   │   └── memory.py            # MemGPT 式 Memory Harness（分层记忆管理）
 │   ├── safety/
 │   │   ├── __init__.py          # SecurityPipeline / LlamaFirewallPipeline /
 │   │   │                        # SystemPromptDefense / GuardrailPipeline
@@ -174,7 +179,7 @@ python run_experiment.py --subset 200 --workers 16
 
 | 维度 | 选项 |
 |------|------|
-| **Harness 配置** | Direct API · ReAct · Multi-Agent+Critic · Map-Reduce |
+| **Harness 配置** | Direct API · ReAct · Multi-Agent+Critic · Map-Reduce · MemGPT-style Memory |
 | **安全模式** | Unprotected · System-Prompt · Guardrail · LlamaFirewall · SafeHarness |
 | **攻击类型** | Clean · Context Poisoning · Indirect Injection · Tool Tampering · Memory Injection · Composite |
 | **Agent 模型** | DeepSeek-Chat · GPT-4o（另可扩展） |
@@ -269,12 +274,12 @@ python run_experiment.py --subset 200 --workers 16
 | 维度 | 数量 | 具体值 |
 |------|------|--------|
 | 任务数 | 200 | Agent-SafetyBench 分层采样 |
-| Harness | 4 | Direct, ReAct, Multi-Agent, Map-Reduce |
+| Harness | 5 | Direct, ReAct, Multi-Agent, Map-Reduce, Memory |
 | Security Mode | 5 | Unprotected, System-Prompt, Guardrail, LlamaFirewall, SafeHarness |
 | Attack Condition | 6 | Clean + A1-A5 |
 | Agent Model | 2 | DeepSeek-Chat, GPT-4o |
 
-全矩阵 job 数 = 200 × 4 × 5 × 6 × 2 = **48,000 jobs**
+全矩阵 job 数 = 200 × 5 × 5 × 6 × 2 = **60,000 jobs**
 
 ### 每个 Job 的 API 调用次数
 
@@ -286,6 +291,7 @@ python run_experiment.py --subset 200 --workers 16
 | ReAct (5 步) | 5 | 0-2 | 0-2 | 1 | ~8 |
 | Multi-Agent | 2-4 | 0-1 | 0-1 | 1 | ~6 |
 | Map-Reduce | 4-6 | 0-1 | 0-1 | 1 | ~7 |
+| Memory (5 步) | 5 | 0-2 | 0-2 | 1 | ~8 |
 
 说明：
 - **Agent 调用**：模型推理次数，取决于 Harness 配置（ReAct 步数、Critic 轮数、子任务数等）
@@ -299,7 +305,7 @@ python run_experiment.py --subset 200 --workers 16
 ### 全量实验 API 调用量
 
 ```
-全矩阵：48,000 jobs × 6 calls/job ≈ 288,000 次 API 调用
+全矩阵：60,000 jobs × 6 calls/job ≈ 360,000 次 API 调用
 ```
 
 ### 优化方案（推荐）
@@ -314,9 +320,9 @@ python run_experiment.py --subset 200 --workers 16
 优化后的 job 数量计算：
 
 ```
-SafeHarness: 4 harness × 6 attack × 2 model × 200 task = 9,600 jobs
-Baselines:   4 harness × 3 attack × 2 model × 200 task × 4 mode = 19,200 jobs
-总计: 28,800 jobs × 6 calls/job ≈ 172,800 次 API 调用
+SafeHarness: 5 harness × 6 attack × 2 model × 200 task = 12,000 jobs
+Baselines:   5 harness × 3 attack × 2 model × 200 task × 4 mode = 24,000 jobs
+总计: 36,000 jobs × 6 calls/job ≈ 216,000 次 API 调用
 ```
 
 ### 消融实验
@@ -330,10 +336,10 @@ Baselines:   4 harness × 3 attack × 2 model × 200 task × 4 mode = 19,200 job
 
 | 方案 | Job 数 | API 调用量 | 预计成本（GPT-4o） |
 |------|--------|-----------|-----------------|
-| 全矩阵 | 48,000 | ~288,000 | ~$300-500 |
-| 优化方案（推荐） | 28,800 | ~172,800 | ~$180-300 |
+| 全矩阵 | 60,000 | ~360,000 | ~$360-600 |
+| 优化方案（推荐） | 36,000 | ~216,000 | ~$220-360 |
 | 消融实验 | 1,800 | ~10,800 | ~$11-18 |
-| **优化方案 + 消融** | **30,600** | **~183,600** | **~$190-320** |
+| **优化方案 + 消融** | **37,800** | **~226,800** | **~$230-380** |
 
 > 注：成本估算基于 GPT-4o 的 input/output token 价格，实际成本取决于平均 token 长度。DeepSeek-Chat 作为 Agent 时成本显著更低。
 
@@ -362,6 +368,18 @@ python run_experiment.py --subset 200 --bootstrap
 
 ## 近期改进
 
+### v0.3 (2026-04)
+
+**新增 MemoryHarness — 第五种 Harness 类型**
+- 基于 MemGPT（arXiv:2310.08560）的分层记忆架构，新增 `MemoryHarness` 作为第五种 Harness 类型
+- **Working Memory**：固定容量 FIFO 记忆，始终注入 system prompt，agent 通过 `memory_update_working` 工具主动管理
+- **Archival Memory**：无限容量持久存储，支持 `memory_store`（写入）和 `memory_retrieve`（关键词检索）
+- 记忆工具不经过 `security_pipeline.check_action`（内部认知操作），但检索结果经过 L2 `filter_context` 过滤以防止记忆污染攻击
+- 环境工具结果自动存入 Archival Memory，便于后续步骤检索
+- `HarnessResult.metadata` 中记录 `memory_stats`（archival 条目数、检索次数、working memory 更新次数等）
+- 新增 `src/memory/` 模块（`working_memory.py` + `archival_memory.py`）
+- 新增 `test_memory_pipeline.py` 独立测试脚本
+
 ### v0.2 (2026-04)
 
 **核心逻辑修复**
@@ -384,6 +402,160 @@ python run_experiment.py --subset 200 --bootstrap
 
 ---
 
+## 待跑实验方案（Experiment Roadmap）
+
+以下是当前版本需要完成的全部实验，按优先级排列。
+
+### 实验一：主实验（Main Comparison）
+
+**目标**：对比 5 种 Harness × 5 种安全模式在 Clean 和各攻击条件下的安全与效用表现。
+
+| 维度 | 值 |
+|------|------|
+| 数据 | Agent-SafetyBench 200 条（分层采样） |
+| Harness | Direct · ReAct · Multi-Agent · Map-Reduce · **Memory** |
+| Security Mode | Unprotected · System-Prompt · Guardrail · LlamaFirewall · SafeHarness |
+| Attack | Clean · Context Poisoning · Indirect Injection · Tool Tampering · Memory Injection · Composite |
+| Agent Model | DeepSeek-Chat · GPT-4o |
+| Judge Model | GPT-4o |
+| 指标 | UBR · ASR · TCR · UA · NNH · ORR（均附 Bootstrap 95% CI） |
+
+**优化运行策略**（减少 API 调用量）：
+
+| 分组 | Security Mode | Attack | Harness | 理由 |
+|------|--------------|--------|---------|------|
+| A — 主系统全攻击 | SafeHarness | 全部 6 种 | 全部 5 种 | 完整评估主方案 |
+| B — Baseline 精简 | 其余 4 种 | Clean + A1 + A5 | 全部 5 种 | Clean 提供基准，A1 最常见，A5 综合 |
+
+```bash
+# A 组：SafeHarness 全攻击
+python run_experiment.py --subset 200 --security safe_harness --bootstrap
+
+# B 组：Baseline 精简
+python run_experiment.py --subset 200 \
+  --security unprotected system_prompt guardrail llamafirewall \
+  --attacks clean context_poisoning composite --bootstrap
+```
+
+**预期产出表格**：
+
+| | Unprotected | System-Prompt | Guardrail | LlamaFirewall | SafeHarness |
+|---|---|---|---|---|---|
+| Direct — UBR / TCR | | | | | |
+| ReAct — UBR / TCR | | | | | |
+| Multi-Agent — UBR / TCR | | | | | |
+| Map-Reduce — UBR / TCR | | | | | |
+| **Memory — UBR / TCR** | | | | | |
+
+### 实验二：Memory Harness 专项分析
+
+**目标**：深入分析 MemoryHarness 的独特行为——记忆使用模式、记忆对安全性的影响、记忆污染攻击的效果。
+
+**2a. Memory vs ReAct 逐步对比**
+
+Memory Harness 本质上是 ReAct + 分层记忆管理。通过与 ReAct 的逐步对比来量化"记忆"的增量效果：
+
+| 对比维度 | ReAct | Memory | Delta |
+|----------|-------|--------|-------|
+| UBR（Clean） | | | |
+| UBR（Under Attack） | | | |
+| TCR（Clean） | | | |
+| TCR（Under Attack） | | | |
+| 平均步数 | | | |
+| 平均工具调用数 | | | |
+
+```bash
+python run_experiment.py --subset 200 --harness react memory --bootstrap
+```
+
+**2b. Memory 统计分析**
+
+从 `HarnessResult.metadata["memory_stats"]` 提取以下指标：
+
+| 统计量 | 含义 |
+|--------|------|
+| `archival_entries` | 平均每 task 存入 Archival Memory 的条目数 |
+| `archival_retrieves` | 平均检索次数 |
+| `working_memory_updates` | Working Memory 更新次数 |
+| WM 使用率 | `working_memory_entries / working_memory_capacity` |
+
+按 security mode 和 attack type 分组，观察安全机制是否影响记忆使用模式。
+
+**2c. Memory Injection 攻击对 Memory Harness 的特殊效果**
+
+Memory Injection 攻击注入虚假历史，对 Memory Harness 尤其危险（虚假信息可能被存入 Archival Memory 并在后续步骤被检索出来）。重点观察：
+
+- Memory Harness 在 Memory Injection 下的 UBR 是否高于其他 Harness
+- SafeHarness 的 L2 `filter_context` 是否有效拦截了从 Archival Memory 检索出的污染内容
+
+```bash
+python run_experiment.py --subset 200 --attacks memory_injection \
+  --security unprotected safe_harness --harness react memory --bootstrap
+```
+
+### 实验三：消融实验（Ablation Study）
+
+**目标**：验证 SafeHarness 四层安全机制中每一层的独立贡献。
+
+| 配置 | L1 | L2 | L3 | L4 | 记忆保护 | 验证目标 |
+|------|:--:|:--:|:--:|:--:|:------:|---------|
+| Full | ✓ | ✓ | ✓ | ✓ | ✓ | 基准 |
+| w/o L1 | ✗ | ✓ | ✓ | ✓ | ✓ | 权限控制必要性 |
+| w/o L2 | ✓ | ✗ | ✓ | ✓ | ✓ | 输入过滤必要性 |
+| w/o L3 | ✓ | ✓ | ✗ | ✓ | ✓ | 安全验证必要性 |
+| w/o L4 | ✓ | ✓ | ✓ | ✗ | ✓ | 回滚机制必要性 |
+| w/o Memory | ✓ | ✓ | ✓ | ✓ | ✗ | 记忆保护必要性 |
+
+在 ReAct 和 Multi-Agent 两种 Harness 上运行（配置复杂度适中，安全层参与度最高）：
+
+```bash
+python run_experiment.py --ablation
+# 50 tasks × 2 harness × 6 configs × 3 attacks = 1,800 jobs
+```
+
+### 实验四：跨 Harness 安全-效用权衡分析
+
+**目标**：在统一的攻击条件下，绘制每种 Harness 的 Safety-Utility Pareto 前沿。
+
+对每种 Harness，以 (1−UBR) 为 x 轴、TCR 为 y 轴，标注 5 种安全模式为不同的点。观察：
+
+- 哪种 Harness 在 Pareto 前沿上表现最好（安全与效用兼优）
+- Memory Harness 是否因为额外的记忆管理开销降低了 TCR
+- Memory Harness 是否因为记忆增强上下文而提高了安全性
+
+### API 调用量总估算
+
+| 实验 | Job 数 | API 调用量 | 预计成本 |
+|------|--------|-----------|---------|
+| 主实验 A 组（SafeHarness 全攻击） | 12,000 | ~72,000 | ~$72-120 |
+| 主实验 B 组（Baseline 精简） | 24,000 | ~144,000 | ~$144-240 |
+| Memory 专项（2a+2c） | 4,800 | ~28,800 | ~$29-48 |
+| 消融实验 | 1,800 | ~10,800 | ~$11-18 |
+| **合计** | **~42,600** | **~255,600** | **~$256-426** |
+
+> 注：预计成本基于 GPT-4o 价格。DeepSeek-Chat 成本约为 GPT-4o 的 1/10，实际混合使用时总成本显著更低。
+
+### 推荐运行顺序
+
+```
+1. python test_e2e.py                          # 验证代码无误
+2. python test_memory_pipeline.py              # 验证 Memory 通路
+3. python run_demo.py --tasks 3                # 小规模 demo 确认输出格式
+4. python run_experiment.py --subset 50 \      # 小规模验证全流程
+     --harness direct react memory \
+     --security unprotected safe_harness \
+     --bootstrap
+5. python run_experiment.py --subset 200 \     # 主实验 A 组
+     --security safe_harness --bootstrap
+6. python run_experiment.py --subset 200 \     # 主实验 B 组
+     --security unprotected system_prompt guardrail llamafirewall \
+     --attacks clean context_poisoning composite --bootstrap
+7. python run_experiment.py --ablation         # 消融实验
+8. python visualize.py output/experiment_results.json  # 生成图表
+```
+
+---
+
 ## 引用
 
 如果使用本框架，请引用：
@@ -394,5 +566,16 @@ python run_experiment.py --subset 200 --bootstrap
   author={Liu, Yang and Chen, Yancheng and Zhang, Shuai and Wu, Yongxuan and Lin, Xixun},
   journal={arXiv preprint},
   year={2026}
+}
+```
+
+MemoryHarness 的设计参考了 MemGPT 的分层记忆架构：
+
+```bibtex
+@article{packer2023memgpt,
+  title={MemGPT: Towards LLMs as Operating Systems},
+  author={Packer, Charles and Wooders, Sarah and Lin, Kevin and Fang, Vivian and Patil, Shishir G and Stoica, Ion and Gonzalez, Joseph E},
+  journal={arXiv preprint arXiv:2310.08560},
+  year={2023}
 }
 ```
