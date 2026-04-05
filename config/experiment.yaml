@@ -9,26 +9,34 @@ data:
   dataset_name: "thu-coai/Agent-SafetyBench"
   local_dir: "data/agent_safety_bench"
   fallback_url: "https://raw.githubusercontent.com/thu-coai/Agent-SafetyBench/main/data"
+  # First 200 tasks of released_data.json (file order, no shuffle). See released_data_first200.json.
+  dataset_file: "data/agent_safety_bench/released_data_first200.json"
+  sequential_subset: true
   demo_subset_size: 3
   experiment_subset_size: 200
 
 models:
   # Agent and Judge models MUST be different to avoid self-evaluation bias.
-  # Keys must match MODEL_FUNC_MAP in llm_api.py.
+  # Short names must match MODEL_FUNC_MAP in llm_api.py (or use raw gateway model ids if enabled).
   agent_models:
-    - "deepseek_chat"
-    - "gpt4o"
-  judge_model: "gpt4o"
+    - "gpt5.4"
+    # - "deepseek_chat"
+  judge_model: "gpt4omini" # "gpt4o" is also supported
+
 
 harness:
   types:
-    - "direct"
+    # - "direct"
     - "react"
     - "multi_agent"
-    - "map_reduce"
+    # - "map_reduce"
+    - "memskill"
   react_max_steps: 5
   multi_agent_max_revisions: 2
   map_reduce_max_subtasks: 3
+  memskill_react_steps: 5        # ReAct loop steps in Phase 2
+  memskill_top_k: 3              # number of skills selected per span
+  memskill_retrieve_k: 10        # memories retrieved per turn
 
 security_modes:
   - "unprotected"
@@ -79,7 +87,7 @@ attacks:
     - "composite"
 
 parallel:
-  max_workers: 8
+  max_workers: 16
 
 evaluation:
   llm_judge:

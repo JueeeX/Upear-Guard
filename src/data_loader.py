@@ -5,13 +5,13 @@ Tries HuggingFace `datasets` first, then falls back to direct download
 from GitHub.  All data is cached under the path specified in experiment.yaml.
 """
 
+from __future__ import annotations
+
 import json
-import os
 import random
 from pathlib import Path
-from typing import Any
-
-DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "agent_safety_bench"
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = _PROJECT_ROOT / "data" / "agent_safety_bench"
 
 
 def _download_from_hf() -> list[dict]:
@@ -59,26 +59,43 @@ def download_dataset(force: bool = False) -> Path:
 
 
 def load_dataset_local(path: Path | str | None = None) -> list[dict]:
-    """Load the cached dataset from disk.  Downloads first if absent."""
+    """Load the cached dataset from disk.  Downloads first if *path* is omitted."""
     if path is None:
         path = download_dataset()
     else:
         path = Path(path)
+        if not path.is_absolute():
+            path = _PROJECT_ROOT / path
         if not path.exists():
-            path = download_dataset()
+            raise FileNotFoundError(
+                f"Dataset file not found: {path} "
+                "(expected a JSON list; set data.dataset_file in experiment.yaml)"
+            )
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
-def load_subset(n: int = 3, seed: int = 42) -> list[dict]:
-    """Load the full dataset and return *n* diverse samples.
+def load_subset(
+    n: int = 3,
+    seed: int = 42,
+    *,
+    dataset_file: str | Path | None = None,
+    sequential: bool = False,
+) -> list[dict]:
+    """Load *n* tasks from the benchmark.
 
-    Uses *seed* to shuffle candidates within each risk bucket, then
-    picks one example from each category (round-robin) so that the
-    subset covers as many risk types as possible.
+    If *dataset_file* is set, load that file (path relative to project root).
+    If *sequential* is True, return the first *n* records in file order (no shuffle).
+    Otherwise (*sequential* False, default) use risk-bucket round-robin sampling
+    on the default full ``released_data.json``.
     """
-    data = load_dataset_local()
+    if dataset_file is not None:
+        data = load_dataset_local(dataset_file)
+    else:
+        data = load_dataset_local()
     n = min(n, len(data))
+    if sequential:
+        return data[:n]
 
     rng = random.Random(seed)
 

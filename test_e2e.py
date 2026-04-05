@@ -66,6 +66,7 @@ from src.harness.direct import DirectHarness  # noqa: E402
 from src.harness.react import ReactHarness  # noqa: E402
 from src.harness.multi_agent import MultiAgentHarness  # noqa: E402
 from src.harness.map_reduce import MapReduceHarness  # noqa: E402
+from src.harness.memskill import MemSkillHarness  # noqa: E402
 from src.safety import (SecurityPipeline, LlamaFirewallPipeline,  # noqa: E402
                         SystemPromptDefense, GuardrailPipeline)
 from src.attacks import context_poisoning, memory_injection  # noqa: E402
@@ -127,6 +128,7 @@ def smoke_test():
         (ReactHarness, "react"),
         (MultiAgentHarness, "multi_agent"),
         (MapReduceHarness, "map_reduce"),
+        (MemSkillHarness, "memskill"),
     ]
 
     security_configs = [
@@ -321,8 +323,44 @@ def smoke_test():
     assert not d.allowed, "Path traversal should be blocked"
     print(f"    L1 path traversal block OK: {d.reason}")
 
-    # -- [7/7] ReAct stricter termination --
-    print("\n  [7/7] Testing ReAct termination regex …\n")
+    # -- [7/8] MemSkill memory bank and parsing --
+    print("\n  [7/8] Testing MemSkill memory bank & action parsing …\n")
+    from src.harness.memskill import MemoryBank
+
+    mb = MemoryBank(max_items=5)
+    mb.insert("Alice lives in NYC", source_span=0)
+    mb.insert("Bob works at Google", source_span=1)
+    assert len(mb) == 2, f"Expected 2 items, got {len(mb)}"
+    mb.update(0, "Alice lives in London")
+    assert "London" in mb.items[0].content
+    mb.delete(1)
+    assert len(mb) == 1
+    print(f"    MemoryBank CRUD OK (size={len(mb)})")
+
+    executor_output = (
+        "ACTION: INSERT\n"
+        "MEMORY ITEM: Charlie joined the team in 2025\n\n"
+        "ACTION: UPDATE\n"
+        "MEMORY INDEX: 0\n"
+        "UPDATED MEMORY: Alice moved to Paris in 2026\n\n"
+        "ACTION: NOOP"
+    )
+    mb2 = MemoryBank()
+    mb2.insert("Alice lives in London")
+    MemSkillHarness._parse_and_apply_actions(executor_output, mb2, span_idx=0)
+    assert len(mb2) == 2, f"Expected 2, got {len(mb2)}"
+    assert "Paris" in mb2.items[0].content, "UPDATE should have changed item 0"
+    assert "Charlie" in mb2.items[1].content, "INSERT should have added Charlie"
+    print("    MemSkill action parsing OK")
+
+    indices = MemSkillHarness._parse_indices("[0, 2, 3]", bank_size=4, top_k=3)
+    assert indices == [0, 2, 3], f"Expected [0, 2, 3], got {indices}"
+    indices_bad = MemSkillHarness._parse_indices("no json", bank_size=4, top_k=2)
+    assert indices_bad == [0, 1], f"Fallback expected [0, 1], got {indices_bad}"
+    print("    MemSkill index parsing OK")
+
+    # -- [8/8] ReAct stricter termination --
+    print("\n  [8/8] Testing ReAct termination regex …\n")
     from src.harness.react import _FINISH_RE
     assert _FINISH_RE.search("Action: FINISH"), "Should match Action: FINISH"
     assert _FINISH_RE.search("Final Answer: done"), "Should match Final Answer:"

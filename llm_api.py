@@ -71,8 +71,14 @@ def call_claude_sonnet(messages):
     return call_anthropic(messages, model_name="claude-sonnet-4-5-20250929")
 
 
+def call_gpt_5_4(messages):
+    return call_llm(messages, model_name="gpt-5.4-2026-03-05", timeout=3600)
+
 def call_gpt4o(messages):
     return call_llm(messages, model_name="gpt-4o", timeout=3600)
+
+def call_gpt_4o_mini(messages):
+    return call_llm(messages, model_name="gpt-4o-mini-2024-07-18", timeout=3600)
 
 
 def call_deepseek_chat(messages):
@@ -81,8 +87,10 @@ def call_deepseek_chat(messages):
 
 MODEL_FUNC_MAP = {
     # "claude_sonnet": call_claude_sonnet,
+    "gpt5.4": call_gpt_5_4,
     "gpt4o": call_gpt4o,
     "deepseek_chat": call_deepseek_chat,
+    "gpt4omini": call_gpt_4o_mini,
 }
 
 

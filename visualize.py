@@ -25,12 +25,13 @@ SECURITY_LABELS = {
     "llamafirewall": "LlamaFirewall",
     "safe_harness":"SafeHarness",
 }
-HARNESS_ORDER = ["direct", "react", "multi_agent", "map_reduce"]
+HARNESS_ORDER = ["direct", "react", "multi_agent", "map_reduce", "memskill"]
 HARNESS_LABELS = {
     "direct":      "Direct",
     "react":       "ReAct",
     "multi_agent": "Multi-Agent",
     "map_reduce":  "Map-Reduce",
+    "memskill":    "MemSkill",
 }
 SECURITY_ORDER = ["unprotected", "llamafirewall", "safe_harness"]
 

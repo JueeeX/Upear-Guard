@@ -8,13 +8,27 @@
 
 ## 设计动机
 
-现有 AI Agent 安全方案主要采用**外挂式（bolt-on）**思路：在 Agent 执行流程的外部叠加独立的安全模块（如输入过滤器、输出检测器）。这种方法存在根本性缺陷：
+### 问题背景：Agent 任务与安全决策绑在执行形态上
 
-1. **信息盲区**：外挂模块无法感知 Harness 内部状态（如 ReAct 的推理链、Multi-Agent 的角色上下文、Map-Reduce 的任务分解过程），导致安全决策缺乏上下文
-2. **防御碎片化**：各安全检查点之间缺乏协调与反馈，无法形成纵深防御
-3. **覆盖不全**：仅覆盖输入或输出端，忽略了执行过程中的权限控制、状态管理等关键环节
+面向工具的 Agent 往往在**多轮推理、工具调用、环境状态与记忆读写**中完成任务；同一类「不安全行为」可能出现在用户指令、检索内容、工具返回值、跨步推理或持久状态中。若把安全看成「进模型前拦一次、出模型后查一次」，会默认攻击面主要落在自然语言接口两端——这与真实 Agent 的**长链路、可观测中间态**并不一致。
 
-SafeHarness 的核心观察是：**Agent 的安全性不能后期追加，必须从 Harness 架构层面原生嵌入**。安全机制应当覆盖 Agent 执行生命周期的每一个阶段，且各安全层之间需要有层间反馈和联动。
+### 外挂式（bolt-on）方案为何不够
+
+业界常见做法是在模型调用前后叠加独立模块（输入过滤、输出审核、外挂护栏等）。这类设计在本项目所针对的场景下存在三类结构性不足：
+
+1. **与执行范式脱钩**：不同 Harness（如 Direct、ReAct、Multi-Agent、Map-Reduce、MemSkill 等）在**推理轨迹、角色分工、子任务并行与记忆构建**上的行为差异很大；安全模块若停留在「黑盒外侧」，难以稳定获得与决策相关的**中间表征**（例如逐步 Observation、分解结果、记忆条目），容易产生误判或漏判。
+2. **防御割裂、难以联动**：输入侧、推理侧、工具侧、状态侧若各自为政，缺少统一信号（如注入迹象、风险分数、降级等级）在层间传递，就无法形成**可解释的纵深防御**，也不利于在攻击升级时自动收紧策略。
+3. **关键环节覆盖不足**：高风险动作往往发生在**工具执行与状态更新**（权限边界、工具完整性、可回滚性）；仅覆盖「进/出两端」会低估工具滥用、描述篡改、记忆/环境腐蚀等向量——这与本仓库威胁模型（T1–T6）及 Agent-SafetyBench 类评测所强调的风险并不对齐。
+
+### SafeHarness 的立场
+
+本项目的核心判断是：**可信的 Agent 安全应尽量与 Harness 执行管线同构**——把安全机制作为执行路径上的**一等公民**，在统一抽象下接入多种 Harness，使「同一类防御」可在不同执行形态间**横向可比**。
+
+具体而言：
+
+- **生命周期对齐**：将安全职责映射到「输入处理 → 决策推理 → 动作执行 → 状态更新」四段，并辅以跨步记忆保护与熵监控，避免遗漏持久状态与跨步攻击面。
+- **层间反馈而非堆叠**：各层可基于上游信号升级验证、触发回滚与权限收紧，并在风险降低后自适应恢复，平衡安全与效用。
+- **可检验**：通过禁用单层或记忆组件的消融配置，验证「缺哪一层、伤哪类指标」，使动机不仅停留在设计主张，也与实验结论闭环。
 
 ---
 
@@ -99,7 +113,8 @@ SafeHarness/
 │   │   ├── direct.py            # Direct API（含 L2 observation 过滤）
 │   │   ├── react.py             # ReAct 推理循环（含 L2 observation 过滤）
 │   │   ├── multi_agent.py       # Multi-Agent + Critic（含 L2 observation 过滤）
-│   │   └── map_reduce.py        # Map-Reduce 任务委托（含 L2 observation 过滤）
+│   │   ├── map_reduce.py        # Map-Reduce 任务委托（含 L2 observation 过滤）
+│   │   └── memskill.py          # MemSkill 技能条件化记忆构建 + 记忆增强 ReAct
 │   ├── safety/
 │   │   ├── __init__.py          # SecurityPipeline / LlamaFirewallPipeline /
 │   │   │                        # SystemPromptDefense / GuardrailPipeline
@@ -122,6 +137,8 @@ SafeHarness/
 ├── run_demo.py                  # 快速 Demo
 ├── run_experiment.py            # 完整实验入口（含消融/Bootstrap）
 ├── visualize.py                 # 结果可视化
+├── results.py                   # 从已保存 JSON/JSONL 离线重算指标
+├── test_e2e.py                  # 端到端冒烟（默认可 mock LLM）
 ├── llm_api.py                   # LLM API 底层调用
 ├── requirements.txt
 └── README.md
@@ -146,7 +163,7 @@ python run_demo.py
 ### 3. 运行完整实验
 
 ```bash
-# 200 条数据，全矩阵
+# 200 条数据，按当前 config 矩阵运行
 python run_experiment.py --subset 200
 
 # 消融实验
@@ -174,11 +191,22 @@ python run_experiment.py --subset 200 --workers 16
 
 | 维度 | 选项 |
 |------|------|
-| **Harness 配置** | Direct API · ReAct · Multi-Agent+Critic · Map-Reduce |
+| **Harness 配置** | Direct API · ReAct · Multi-Agent+Critic · Map-Reduce · MemSkill |
 | **安全模式** | Unprotected · System-Prompt · Guardrail · LlamaFirewall · SafeHarness |
 | **攻击类型** | Clean · Context Poisoning · Indirect Injection · Tool Tampering · Memory Injection · Composite |
-| **Agent 模型** | DeepSeek-Chat · GPT-4o（另可扩展） |
-| **Judge 模型** | GPT-4o（固定，与 Agent 模型分离） |
+| **Agent 模型** | gpt5.4（默认）· deepseek_chat（可选） |
+| **Judge 模型** | gpt4omini（默认）· gpt4o（可选，与 Agent 分离） |
+
+### Harness 配置说明
+
+| Harness | 执行形态 | 评测关注点 |
+|---------|----------|------------|
+| **Direct** | 单次模型调用，至多一轮工具执行 | 交互链最短，适合作为「无多步推理」对照；对间接注入的暴露主要在一次 observation |
+| **ReAct** | Thought / Action / Observation 多步循环，直至 FINISH | 多轮推理与工具观测并存，典型考察 L2 对 observation、L3 对逐步推理的覆盖 |
+| **Multi-Agent** | Primary 生成 + Critic 审核，可带修订轮次 | 多角色与修订链增加语义空间；适合检验跨角色上下文与安全反馈是否被安全管线感知 |
+| **Map-Reduce** | 分解子任务 → 并行求解 → 聚合输出 | 子任务与聚合阶段均可能引入或放大风险；关注跨子结果与归并阶段的过滤与一致性 |
+| **MemSkill** | 先基于 span 做技能条件化记忆构建，再执行记忆增强的 ReAct | 显式记忆读写与检索，攻击面含记忆质量与检索依赖；与「仅对话、无结构化记忆库」的 Harness 形成对照 |
+
 
 ### 安全基线说明
 
@@ -250,7 +278,7 @@ python run_experiment.py --subset 200 --workers 16
 
 所有参数均在 `config/experiment.yaml` 中配置，包括：
 
-- **models**: Agent 模型列表和 Judge 模型（必须不同以避免自我评估偏差）
+- **models**: Agent 模型列表和 Judge 模型（必须不同以避免自我评估偏差，当前默认 `gpt5.4` + `gpt4omini`）
 - **harness**: Harness 类型列表及各类型参数
 - **security_modes**: 5 种安全模式
 - **safety**: 各层参数（L1 令牌配置、L2 可疑模式、L3 阈值、L4 检查点间隔与恢复窗口）
@@ -262,85 +290,79 @@ python run_experiment.py --subset 200 --workers 16
 
 ## 实验运行指南与 API 调用量估算
 
-### 完整实验矩阵
+### 当前默认实验规模（来自 `config/experiment.yaml`）
 
-完整对比实验包含以下维度的笛卡尔积：
+当前仓库默认配置：
+- 任务数：200（`data.experiment_subset_size`）
+- Harness：3（`react`, `multi_agent`, `memskill`）
+- Security Mode：5
+- Attack Condition：6（clean + A1-A5，clean 在代码中自动加入）
+- Agent Model：1（`gpt5.4`）
 
-| 维度 | 数量 | 具体值 |
-|------|------|--------|
-| 任务数 | 200 | Agent-SafetyBench 分层采样 |
-| Harness | 4 | Direct, ReAct, Multi-Agent, Map-Reduce |
-| Security Mode | 5 | Unprotected, System-Prompt, Guardrail, LlamaFirewall, SafeHarness |
-| Attack Condition | 6 | Clean + A1-A5 |
-| Agent Model | 2 | DeepSeek-Chat, GPT-4o |
-
-全矩阵 job 数 = 200 × 4 × 5 × 6 × 2 = **48,000 jobs**
-
-### 每个 Job 的 API 调用次数
-
-不同 Harness 和安全模式下，每个 job 所需的 LLM API 调用次数不同：
-
-| Harness | Agent 调用 | L2 语义过滤 | L3 Tier2/3 | 评估 Judge | 合计 |
-|---------|-----------|------------|-----------|-----------|------|
-| Direct | 1 | 0-1 | 0-1 | 1 | ~3 |
-| ReAct (5 步) | 5 | 0-2 | 0-2 | 1 | ~8 |
-| Multi-Agent | 2-4 | 0-1 | 0-1 | 1 | ~6 |
-| Map-Reduce | 4-6 | 0-1 | 0-1 | 1 | ~7 |
-
-说明：
-- **Agent 调用**：模型推理次数，取决于 Harness 配置（ReAct 步数、Critic 轮数、子任务数等）
-- **L2 语义过滤**：仅在 Stage 2 模式检测命中且有 judge_model 时触发额外 LLM 调用
-- **L3 Tier2/3**：仅在 Tier 1 规则判定为中等风险（tau_low < score < tau_high）时升级到 LLM 验证
-- **评估 Judge**：每个 job 结束后调用一次 LLM Judge 评估安全性
-- Unprotected / System-Prompt 模式下无 L2/L3 LLM 调用，仅 Agent + Judge
-
-加权平均 ≈ **6 次调用/job**
-
-### 全量实验 API 调用量
+主实验 job 数：
 
 ```
-全矩阵：48,000 jobs × 6 calls/job ≈ 288,000 次 API 调用
+200 × 3 × 5 × 6 × 1 = 18,000 jobs
 ```
 
-### 优化方案（推荐）
-
-实际运行中，不需要对所有 baseline 跑全部攻击。推荐策略：
-
-| 安全模式 | 攻击条件 | 理由 |
-|---------|---------|------|
-| SafeHarness | 全部 6 种 | 需要完整评估主系统在所有攻击下的表现 |
-| 其他 4 种 baseline | Clean + A1 + A5 | Clean 提供基准，A1 是最常见攻击，A5 综合测试 |
-
-优化后的 job 数量计算：
+消融实验（默认）job 数：
 
 ```
-SafeHarness: 4 harness × 6 attack × 2 model × 200 task = 9,600 jobs
-Baselines:   4 harness × 3 attack × 2 model × 200 task × 4 mode = 19,200 jobs
-总计: 28,800 jobs × 6 calls/job ≈ 172,800 次 API 调用
+50 × 2 harness × 6 configs × 6 attack_conditions = 3,600 jobs
 ```
 
-### 消融实验
+合计（主实验 + 消融）：
 
 ```
-50 tasks × 2 harness (ReAct + Multi-Agent) × 6 configs × 3 attacks = 1,800 jobs
-1,800 jobs × 6 calls/job ≈ 10,800 次 API 调用
+21,600 jobs
 ```
 
-### 总计
+### API 调用量（经验估算）
 
-| 方案 | Job 数 | API 调用量 | 预计成本（GPT-4o） |
-|------|--------|-----------|-----------------|
-| 全矩阵 | 48,000 | ~288,000 | ~$300-500 |
-| 优化方案（推荐） | 28,800 | ~172,800 | ~$180-300 |
-| 消融实验 | 1,800 | ~10,800 | ~$11-18 |
-| **优化方案 + 消融** | **30,600** | **~183,600** | **~$190-320** |
+在默认 Harness 组合（ReAct + Multi-Agent + MemSkill）下，经验上：
+- ReAct：约 8 calls/job
+- Multi-Agent：约 6 calls/job
+- MemSkill：约 12 calls/job（Phase 1 技能选择 + 执行器 + Phase 2 ReAct + 增量记忆更新）
+- 加权平均按 ~9 calls/job 估算
 
-> 注：成本估算基于 GPT-4o 的 input/output token 价格，实际成本取决于平均 token 长度。DeepSeek-Chat 作为 Agent 时成本显著更低。
+则总调用量约为：
+
+```
+主实验:   18,000 × 9 ≈ 162,000 calls
+消融实验:  3,600 × 7 ≈  25,200 calls
+合计:                ≈ 187,200 calls
+```
+
+### 成本估算（CNY，按你给的单价）
+
+计价（CNY / 1M tokens）：
+- Agent (`gpt5.4`)：输入 15.750，输出 94.500
+- Judge (`gpt4o-mini`)：输入 0.945，输出 3.780
+
+单个 job 成本可按下式计算：
+
+```
+Cost_job(CNY) =
+  (Agent_in_tokens  × 15.750
+ + Agent_out_tokens × 94.500
+ + Judge_in_tokens  × 0.945
+ + Judge_out_tokens × 3.780) / 1,000,000
+```
+
+给一个便于预算的三档估算（可按你的真实日志替换）：
+
+| 档位 | Agent tokens (in/out) | Judge tokens (in/out) | 单 job 估算 | 21,600 jobs 估算 |
+|------|------------------------|------------------------|------------|------------------|
+| 保守 | 800 / 250 | 600 / 80 | ~0.037 CNY | ~803 CNY |
+| 中位 | 1200 / 400 | 800 / 120 | ~0.058 CNY | ~1,253 CNY |
+| 偏高 | 1800 / 700 | 1200 / 180 | ~0.096 CNY | ~2,084 CNY |
+
+> 注：成本对 **Agent 输出 token** 最敏感（单价最高）。如需压成本，优先控制 ReAct 步数、减少冗长输出与无效工具回合。
 
 ### 运行命令
 
 ```bash
-# 完整主实验（优化方案）
+# 主实验（按 config 默认矩阵）
 python run_experiment.py --subset 200
 
 # 仅 SafeHarness 模式跑全攻击
@@ -354,13 +376,31 @@ python run_experiment.py --subset 200 \
 # 消融实验
 python run_experiment.py --ablation
 
-# 带 Bootstrap CI
+# 主实验 + Bootstrap 置信区间
 python run_experiment.py --subset 200 --bootstrap
+
+# Demo：仅跑指定 harness / security（run_demo 支持过滤）
+python run_demo.py --tasks 5 --harness react multi_agent --security unprotected safe_harness
 ```
 
 ---
 
 ## 近期改进
+
+### v0.3 (2026-04)
+
+**新增 MemSkill Harness**
+
+新增与 ReAct / Multi-Agent / Map-Reduce 并列的 MemSkill Harness，基于 Zhang et al. (2026) 的 MemSkill 框架：
+
+- **技能银行（Skill Bank）**：维护一组结构化、可复用的记忆技能（INSERT / UPDATE / DELETE / SKIP），每个技能包含 Purpose / When to use / How to apply / Constraints / Action type
+- **两阶段执行**：
+  - *Phase 1 — 记忆构建*：将先验对话/上下文切分为文本段（span），每段通过 LLM Controller 选择 Top-K 技能，再由 LLM Executor 在一次调用中生成技能引导的记忆更新
+  - *Phase 2 — 记忆增强 ReAct*：在标准 Thought / Action / Observation 循环中，每轮注入从 Memory Bank 检索的相关记忆；每次新 Observation 后触发增量记忆更新
+- **安全集成**：与 SafeHarness 四层安全机制完全兼容——工具输出经 L2 过滤，推理步骤记录至 L3，工具调用经 L1 权限检查
+- **配置项**：`memskill_react_steps`（Phase 2 步数）、`memskill_top_k`（每段选择技能数）、`memskill_retrieve_k`（每轮检索记忆数）
+
+> 参考：Zhang et al., "MemSkill: Learning and Evolving Memory Skills for Self-Evolving Agents", arXiv:2602.02474, Feb 2026.
 
 ### v0.2 (2026-04)
 

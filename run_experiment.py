@@ -41,6 +41,7 @@ from src.harness.direct import DirectHarness
 from src.harness.react import ReactHarness
 from src.harness.multi_agent import MultiAgentHarness
 from src.harness.map_reduce import MapReduceHarness
+from src.harness.memskill import MemSkillHarness
 from src.safety import (SecurityPipeline, LlamaFirewallPipeline,
                         SystemPromptDefense, GuardrailPipeline)
 from src.attacks import (context_poisoning, tool_tampering,
@@ -54,6 +55,7 @@ HARNESS_MAP = {
     "react": ReactHarness,
     "multi_agent": MultiAgentHarness,
     "map_reduce": MapReduceHarness,
+    "memskill": MemSkillHarness,
 }
 
 ATTACK_MAP: dict[str, Callable] = {
@@ -97,6 +99,14 @@ class Record:
 def load_config(path: str) -> dict:
     with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+def _append_jsonl(path: Path, record_dict: dict, lock: threading.Lock) -> None:
+    """Append one JSON object per line; safe for concurrent callers sharing *lock*."""
+    line = json.dumps(record_dict, ensure_ascii=False) + "\n"
+    with lock:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line)
 
 
 def build_security_pipeline(mode, registry, config, judge_model,
@@ -183,9 +193,18 @@ def main():
         _run_ablation(cfg, output_dir, max_workers)
         return
 
+    # Incremental JSON Lines log (survives crashes); cleared each new main run.
+    jsonl_path = output_dir / "experiment_results.jsonl"
+    jsonl_path.unlink(missing_ok=True)
+
     subset_size = args.subset or cfg["data"].get("experiment_subset_size",
                                                    cfg["data"]["demo_subset_size"])
-    tasks = load_subset(subset_size)
+    data_cfg = cfg.get("data", {})
+    tasks = load_subset(
+        subset_size,
+        dataset_file=data_cfg.get("dataset_file"),
+        sequential=data_cfg.get("sequential_subset", False),
+    )
     print(f"[*] Loaded {len(tasks)} tasks.")
 
     registry = build_default_registry()
@@ -207,9 +226,12 @@ def main():
                                         atk_type, ATTACK_MAP[atk_type]))
 
     total = len(jobs)
-    print(f"[*] {total} jobs to run with {max_workers} workers.\n")
+    print(f"[*] {total} jobs to run with {max_workers} workers.")
+    print(f"[*] Appending each record to {jsonl_path} as jobs finish.\n")
 
-    results = _execute_jobs(jobs, registry, cfg, judge_model, max_workers)
+    results = _execute_jobs(
+        jobs, registry, cfg, judge_model, max_workers, jsonl_path=jsonl_path,
+    )
 
     # ── Per-group metrics ──────────────────────────────────────
     _print_metrics_table(results, agent_models, harness_types,
@@ -234,9 +256,17 @@ def main():
 
 def _run_ablation(cfg, output_dir, max_workers):
     """Run ablation study: SafeHarness with individual layers disabled."""
+    jsonl_path = Path(output_dir) / "ablation_results.jsonl"
+    jsonl_path.unlink(missing_ok=True)
+
     abl_cfg = cfg.get("ablation", {})
     subset_size = abl_cfg.get("subset_size", 50)
-    tasks = load_subset(subset_size)
+    data_cfg = cfg.get("data", {})
+    tasks = load_subset(
+        subset_size,
+        dataset_file=data_cfg.get("dataset_file"),
+        sequential=data_cfg.get("sequential_subset", False),
+    )
     print(f"[*] Ablation: {len(tasks)} tasks.")
 
     registry = build_default_registry()
@@ -265,9 +295,12 @@ def _run_ablation(cfg, output_dir, max_workers):
                     ))
 
     total = len(jobs)
-    print(f"[*] Ablation: {total} jobs with {max_workers} workers.\n")
+    print(f"[*] Ablation: {total} jobs with {max_workers} workers.")
+    print(f"[*] Appending each record to {jsonl_path} as jobs finish.\n")
 
-    results = _execute_jobs(jobs, registry, cfg, judge_model, max_workers)
+    results = _execute_jobs(
+        jobs, registry, cfg, judge_model, max_workers, jsonl_path=jsonl_path,
+    )
 
     print("\n  Ablation Results:")
     print("-" * 80)
@@ -286,7 +319,8 @@ def _run_ablation(cfg, output_dir, max_workers):
     _save_results(results, output_dir / "ablation_results.json", cfg)
 
 
-def _execute_jobs(jobs, registry, cfg, judge_model, max_workers):
+def _execute_jobs(jobs, registry, cfg, judge_model, max_workers,
+                  jsonl_path: Path | None = None):
     results: list[Record] = []
     counter = {"done": 0}
     lock = threading.Lock()
@@ -297,6 +331,8 @@ def _execute_jobs(jobs, registry, cfg, judge_model, max_workers):
         with lock:
             counter["done"] += 1
             _print_row(rec, counter["done"], total)
+        if jsonl_path is not None:
+            _append_jsonl(jsonl_path, _rec_dict(rec), lock)
         return rec
 
     t_start = time.time()
@@ -454,6 +490,9 @@ def _save_results(results, out_file, cfg):
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(all_dicts, f, ensure_ascii=False, indent=2)
     print(f"\n[*] Results saved → {out_file}")
+    jl = out_file.with_suffix(".jsonl")
+    if jl.exists():
+        print(f"[*] (Incremental log still available at {jl})")
 
 
 def _print_row(r: Record, done: int, total: int):

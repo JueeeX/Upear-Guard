@@ -18,6 +18,8 @@ import llm_api  # noqa: E402
 
 MODEL_FUNC_MAP_NAMES: dict[str, str] = {
     "gpt4o": "gpt-4o",
+    "gpt4omini": "gpt-4o-mini-2024-07-18",
+    "gpt5.4": "gpt-5.4-2026-03-05",
     "deepseek_chat": "deepseek-chat",
 }
 
@@ -30,8 +32,8 @@ def available_models():
 def call_model(model_name: str, messages: list[dict]) -> str | None:
     """Unified interface: call *model_name* with *messages*.
 
-    *model_name* must be a key in MODEL_FUNC_MAP (e.g. 'deepseek_v3_2').
-    Returns the assistant reply string, or None on failure.
+    *model_name* may be a MODEL_FUNC_MAP short name (e.g. ``gpt4o``) or a raw
+    OpenAI-compatible gateway model id (e.g. ``gpt-5.4-2026-03-05``).
     """
     return llm_api.call_by_name(model_name, messages)
 
