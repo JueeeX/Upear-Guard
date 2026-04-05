@@ -278,7 +278,7 @@ python run_experiment.py --subset 200 --workers 16
 
 所有参数均在 `config/experiment.yaml` 中配置，包括：
 
-- **models**: Agent 模型列表和 Judge 模型（必须不同以避免自我评估偏差，当前默认 `gpt5.4` + `gpt4omini`）
+- **models**: Agent 模型列表和 Judge 模型（必须不同以避免自我评估偏差；当前默认 `gpt5.4` + `gpt4omini`）
 - **harness**: Harness 类型列表及各类型参数
 - **security_modes**: 5 种安全模式
 - **safety**: 各层参数（L1 令牌配置、L2 可疑模式、L3 阈值、L4 检查点间隔与恢复窗口）
@@ -297,7 +297,7 @@ python run_experiment.py --subset 200 --workers 16
 - Harness：3（`react`, `multi_agent`, `memskill`）
 - Security Mode：5
 - Attack Condition：6（clean + A1-A5，clean 在代码中自动加入）
-- Agent Model：1（`gpt5.4`）
+- Agent Model：1（`gpt5.4`，与下文成本表 Agent 单价一致；若改用 `deepseek_chat` 等其它模型需替换费率）
 
 主实验 job 数：
 
@@ -317,29 +317,29 @@ python run_experiment.py --subset 200 --workers 16
 21,600 jobs
 ```
 
-### API 调用量（经验估算）
+### API 调用量（与实现对齐的粗算）
 
-在默认 Harness 组合（ReAct + Multi-Agent + MemSkill）下，经验上：
-- ReAct：约 8 calls/job
-- Multi-Agent：约 6 calls/job
-- MemSkill：约 12 calls/job（Phase 1 技能选择 + 执行器 + Phase 2 ReAct + 增量记忆更新）
-- 加权平均按 ~9 calls/job 估算
+以下指 **`call_model` → Agent 模型** 的次数（见 `src/harness/*.py`）；每 job 另有 **1 次** `call_judge`（`src/evaluation/llm_judge.py`）。在 **`safe_harness`** 下，L2 语义过滤与 L3 Tier 2/3 还会对 **`judge_model`** 额外调用 `call_model`（`src/safety/layer2_filtering.py`、`layer3_verification.py`），不计入下表「Harness 侧」次数。
 
-则总调用量约为：
+- **ReAct**（`src/harness/react.py`）：每步一次 Agent 调用，至多 `react_max_steps`（默认 **5**）次；提前 `FINISH` 则更少。
+- **Multi-Agent**（`src/harness/multi_agent.py`）：每轮「Primary + Critic」，Critic 也走 **同一 Agent 模型**；`multi_agent_max_revisions` 默认 2 时，至多 **5** 次 Agent 调用（两轮完整 critic + 最后一轮仅 primary）。
+- **MemSkill**（`src/harness/memskill.py`）：随 `task["dialog"]` 分段出的 span 数与是否提前结束变化较大。Phase 1 每个 span 约 2 次（选技能 + 执行器）；Phase 2 每 ReAct 步 1 次，若做增量记忆更新则每步最多再 2 次；`memskill_evolve_skills` 且 `memskill_evolve_after_phase1` 时再 +1。无 span 时约等于「仅 Phase 2 ReAct」，可低至约 **5** 次 Agent 调用。
 
-```
-主实验:   18,000 × 9 ≈ 162,000 calls
-消融实验:  3,600 × 7 ≈  25,200 calls
-合计:                ≈ 187,200 calls
-```
+粗算示例（不含 `safe_harness` 下 L2/L3 对 `judge_model` 的额外调用）：若 Harness 侧 Agent 调用按三种类型分别约 **3 / 3 / 10** 次取混合中位、每 job 再加 **1** 次评测 Judge，则单次 job 约 **~7** 次 LLM 调用；主实验 **18,000** jobs 则约 **18,000×7 ≈ 1.26×10⁵** 量级。MemSkill 随 span 与增量记忆路径变化大，**safe_harness** 还会显著增加 **Judge 侧**调用。
+
+总 call 数请以网关或日志中的 `usage` 为准。
 
 ### 成本估算（CNY，按你给的单价）
 
-计价（CNY / 1M tokens）：
-- Agent (`gpt5.4`)：输入 15.750，输出 94.500
-- Judge (`gpt4o-mini`)：输入 0.945，输出 3.780
+当前 `experiment.yaml` 中 Agent 为 **`gpt5.4`**、Judge 为 **`gpt4omini`**，与下表一致。
 
-单个 job 成本可按下式计算：
+计价（CNY / 1M tokens）——对应 `llm_api.py` 中 **`gpt5.4`** → `gpt-5.4-2026-03-05`、**`gpt4omini`** → `gpt-4o-mini-2024-07-18`：
+- Agent (`gpt5.4`)：输入 15.750，输出 94.500
+- Judge（`gpt4omini`，与「gpt-4o-mini」同档）：输入 0.945，输出 3.780
+
+**「Judge tokens」在本项目中**应计入所有走 **`judge_model`** 的调用：最终评测（`call_judge`）、以及启用时的 L2 语义过滤 / L3 Tier 2–3（均使用 `call_model(judge_model, …)`）。下表若只按「评测一次」估 Judge tokens，在 **`safe_harness`** 下会**偏低**。
+
+单个 job 成本（上表两类模型；若 Agent 改用其它模型请替换 Agent 侧输入/输出单价）：
 
 ```
 Cost_job(CNY) =
@@ -349,15 +349,15 @@ Cost_job(CNY) =
  + Judge_out_tokens × 3.780) / 1,000,000
 ```
 
-给一个便于预算的三档估算（可按你的真实日志替换）：
+三档示例（代入上式；**21,600 jobs 列为 `单 job 估算 × 21,600`，四舍五入到整数 CNY**）：
 
 | 档位 | Agent tokens (in/out) | Judge tokens (in/out) | 单 job 估算 | 21,600 jobs 估算 |
 |------|------------------------|------------------------|------------|------------------|
-| 保守 | 800 / 250 | 600 / 80 | ~0.037 CNY | ~803 CNY |
-| 中位 | 1200 / 400 | 800 / 120 | ~0.058 CNY | ~1,253 CNY |
-| 偏高 | 1800 / 700 | 1200 / 180 | ~0.096 CNY | ~2,084 CNY |
+| 保守 | 800 / 250 | 600 / 80 | ~0.037 CNY | ~801 CNY |
+| 中位 | 1200 / 400 | 800 / 120 | ~0.058 CNY | ~1,251 CNY |
+| 偏高 | 1800 / 700 | 1200 / 180 | ~0.096 CNY | ~2,080 CNY |
 
-> 注：成本对 **Agent 输出 token** 最敏感（单价最高）。如需压成本，优先控制 ReAct 步数、减少冗长输出与无效工具回合。
+> 注：成本对 **Agent 输出 token** 最敏感（单价最高）。如需压成本，优先控制 ReAct / MemSkill 步数、减少冗长输出与无效工具回合；**safe_harness** 下还需为 L2/L3 预留 **`judge_model` 额度**。
 
 ### 运行命令
 
@@ -393,12 +393,13 @@ python run_demo.py --tasks 5 --harness react multi_agent --security unprotected 
 
 新增与 ReAct / Multi-Agent / Map-Reduce 并列的 MemSkill Harness，基于 Zhang et al. (2026) 的 MemSkill 框架：
 
-- **技能银行（Skill Bank）**：维护一组结构化、可复用的记忆技能（INSERT / UPDATE / DELETE / SKIP），每个技能包含 Purpose / When to use / How to apply / Constraints / Action type
+- **技能银行（Skill Bank）**：维护一组结构化、可复用的记忆技能（INSERT / UPDATE / DELETE / NOOP），每个技能包含 Purpose / When to use / How to apply / Constraints / Action type
 - **两阶段执行**：
   - *Phase 1 — 记忆构建*：将先验对话/上下文切分为文本段（span），每段通过 LLM Controller 选择 Top-K 技能，再由 LLM Executor 在一次调用中生成技能引导的记忆更新
   - *Phase 2 — 记忆增强 ReAct*：在标准 Thought / Action / Observation 循环中，每轮注入从 Memory Bank 检索的相关记忆；每次新 Observation 后触发增量记忆更新
+- **可选技能库轻量自进化**（非论文中的训练式 Designer）：在 `memskill_evolve_skills: true` 时，可在 Phase 1 结束后（及可选地在整段任务结束后）额外调用 LLM，根据当前技能目录、Memory Bank 与 trace 提议 **新增一条技能** 或 **向现有技能的 `content` 追加指导**；进化后的技能库在 Phase 2 中生效。结果记录在 `metadata.skill_evolution_log` 与 trace 中的 `memskill_skill_evolution` 条目。默认关闭，且不包含跨任务持久化。
 - **安全集成**：与 SafeHarness 四层安全机制完全兼容——工具输出经 L2 过滤，推理步骤记录至 L3，工具调用经 L1 权限检查
-- **配置项**：`memskill_react_steps`（Phase 2 步数）、`memskill_top_k`（每段选择技能数）、`memskill_retrieve_k`（每轮检索记忆数）
+- **配置项**：`memskill_react_steps`（Phase 2 步数）、`memskill_top_k`（每段选择技能数）、`memskill_retrieve_k`（每轮检索记忆数）；自进化相关：`memskill_evolve_skills`（总开关）、`memskill_max_skills`（技能总数上限）、`memskill_evolve_after_phase1`（Phase 1 后进化，使 Phase 2 使用新库）、`memskill_evolve_end_task`（任务结束后再进化一次，多用于记录或后续扩展持久化）
 
 > 参考：Zhang et al., "MemSkill: Learning and Evolving Memory Skills for Self-Evolving Agents", arXiv:2602.02474, Feb 2026.
 

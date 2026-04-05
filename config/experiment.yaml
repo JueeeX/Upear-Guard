@@ -37,6 +37,11 @@ harness:
   memskill_react_steps: 5        # ReAct loop steps in Phase 2
   memskill_top_k: 3              # number of skills selected per span
   memskill_retrieve_k: 10        # memories retrieved per turn
+  # Optional: LLM-based skill-bank evolution (add skill or refine existing)
+  memskill_evolve_skills: true
+  memskill_max_skills: 12       # cap total skills (4 defaults + evolved)
+  memskill_evolve_after_phase1: true   # Phase 2 sees evolved bank when true
+  memskill_evolve_end_task: false     # extra LLM call after ReAct; use for logging / future persist
 
 security_modes:
   - "unprotected"

@@ -15,6 +15,11 @@ skills and a per-task *memory bank*.  Execution proceeds in two phases:
     additionally provided with memories retrieved from the bank.  After each
     observation, new memories may be extracted and appended.
 
+Optional **skill-bank evolution** (config memskill_evolve_skills): after
+Phase 1 and/or at task end, an LLM may append one new MemorySkill or add
+guidance to an existing skill — lightweight self-adaptation, not the paper's
+trained designer loop.
+
 When a security pipeline is active, tool outputs (observations) are filtered
 through L2, and reasoning steps are recorded in L3 — identical to ReAct.
 
@@ -27,7 +32,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from src.harness.base import BaseHarness, HarnessResult
@@ -121,6 +126,24 @@ def _default_skill_bank() -> list[MemorySkill]:
     ]
 
 
+_ALLOWED_ACTION_TYPES = frozenset({"INSERT", "UPDATE", "DELETE", "NOOP"})
+
+
+def _extract_json_object(text: str) -> dict[str, Any] | None:
+    """Parse the first top-level JSON object in ``text``."""
+    dec = json.JSONDecoder()
+    for i, ch in enumerate(text):
+        if ch != "{":
+            continue
+        try:
+            obj, _ = dec.raw_decode(text[i:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict):
+            return obj
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Per-task memory bank
 # ---------------------------------------------------------------------------
@@ -185,12 +208,15 @@ class MemSkillHarness(BaseHarness):
         max_steps = self.config.get("memskill_react_steps", 5)
         top_k_skills = self.config.get("memskill_top_k", 3)
         mem_retrieve_k = self.config.get("memskill_retrieve_k", 10)
+        evolve = self.config.get("memskill_evolve_skills", False)
+        max_skills = self.config.get("memskill_max_skills", 12)
 
         skill_bank = _default_skill_bank()
         memory_bank = MemoryBank()
 
         trace: list[dict] = []
         tool_calls, blocked = [], []
+        evolution_log: list[dict[str, Any]] = []
 
         # ── Phase 1: Memory Construction from prior context ──────────
         spans = self._segment_context(task)
@@ -198,6 +224,20 @@ class MemSkillHarness(BaseHarness):
             self._construct_memory(
                 spans, skill_bank, memory_bank, top_k_skills, trace,
             )
+
+        if evolve and spans and self.config.get(
+            "memskill_evolve_after_phase1", True,
+        ):
+            ev = self._evolve_skill_bank_once(
+                skill_bank, memory_bank, trace, task,
+                phase="after_phase1", max_skills=max_skills,
+            )
+            if ev:
+                evolution_log.append(ev)
+                trace.append({
+                    "role": "memskill_skill_evolution",
+                    "content": json.dumps(ev, ensure_ascii=False),
+                })
 
         # ── Phase 2: Memory-Augmented ReAct Loop ─────────────────────
         system_prompt = self._build_memskill_system_prompt(task)
@@ -255,6 +295,18 @@ class MemSkillHarness(BaseHarness):
             })
             trace.append({"role": "observation", "content": observation})
 
+        if evolve and self.config.get("memskill_evolve_end_task", False):
+            ev = self._evolve_skill_bank_once(
+                skill_bank, memory_bank, trace, task,
+                phase="after_task", max_skills=max_skills,
+            )
+            if ev:
+                evolution_log.append(ev)
+                trace.append({
+                    "role": "memskill_skill_evolution",
+                    "content": json.dumps(ev, ensure_ascii=False),
+                })
+
         final = trace[-1]["content"] if trace else ""
 
         return HarnessResult(
@@ -269,10 +321,124 @@ class MemSkillHarness(BaseHarness):
                 "memory_bank_size": len(memory_bank),
                 "skills_used": len(skill_bank),
                 "spans_processed": len(spans),
+                "skill_evolution_log": evolution_log,
             },
         )
 
     # ── internal helpers ──────────────────────────────────────────────
+
+    @staticmethod
+    def _summarize_trace_for_evolution(
+        trace: list[dict], max_chars: int = 3500,
+    ) -> str:
+        parts: list[str] = []
+        for entry in trace:
+            role = entry.get("role", "")
+            if role not in (
+                "memskill_executor", "assistant", "observation",
+                "memskill_skill_evolution",
+            ):
+                continue
+            content = (entry.get("content") or "")[:800]
+            parts.append(f"[{role}]\n{content}")
+        blob = "\n\n".join(parts)
+        if len(blob) > max_chars:
+            return blob[-max_chars:]
+        return blob
+
+    def _evolve_skill_bank_once(
+        self,
+        skill_bank: list[MemorySkill],
+        memory_bank: MemoryBank,
+        trace: list[dict],
+        task: dict[str, Any],
+        *,
+        phase: str,
+        max_skills: int,
+    ) -> dict[str, Any] | None:
+        """One LLM call: optional new skill or appended guidance on an existing skill."""
+        skills_catalog = "\n".join(
+            f"{i}. {s.name} ({s.action_type}): {s.description}"
+            for i, s in enumerate(skill_bank)
+        )
+        task_hint = ""
+        q = task.get("question")
+        if q:
+            task_hint = f"Task / question (truncated):\n{str(q)[:1200]}\n\n"
+        mem_snapshot = memory_bank.retrieve_text(15)
+        trace_blob = self._summarize_trace_for_evolution(trace)
+
+        sys_msg = (
+            "You improve a reusable *memory skill bank* for an LLM agent. "
+            "Skills are chosen by index, then an executor applies them.\n"
+            "Given the catalog, memory snapshot, and trace, you may do nothing, "
+            "add ONE new skill that fills a clear gap, OR refine ONE skill by "
+            "appending short guidance. Do not duplicate an existing skill.\n\n"
+            "Reply with a single JSON object ONLY, no markdown fences:\n"
+            '{"noop": true}\n'
+            'OR {"new_skill": {"name": "...", "description": "one line", '
+            '"content": "Purpose / When / How / Constraints / Action type", '
+            '"action_type": "INSERT|UPDATE|DELETE|NOOP"}}\n'
+            'OR {"refine": {"index": 0, "append": "extra constraints or hints"}}\n'
+            "At most one of new_skill or refine. noop:true means no change."
+        )
+        user_msg = (
+            f"Phase: {phase}\n\n"
+            f"{task_hint}"
+            f"Current skills (indices 0..{len(skill_bank) - 1}):\n"
+            f"{skills_catalog}\n\n"
+            f"Memory bank snapshot:\n{mem_snapshot}\n\n"
+            f"Recent trace:\n{trace_blob}"
+        )
+        resp = call_model(self.model_name, [
+            {"role": "system", "content": sys_msg},
+            {"role": "user", "content": user_msg},
+        ]) or ""
+        payload = _extract_json_object(resp)
+        if not payload:
+            return None
+
+        if payload.get("noop") is True:
+            return {"phase": phase, "action": "noop"}
+
+        refine = payload.get("refine")
+        if isinstance(refine, dict):
+            idx = refine.get("index")
+            append = refine.get("append")
+            if (
+                isinstance(idx, (int, float))
+                and isinstance(append, str)
+                and append.strip()
+            ):
+                ri = int(idx)
+                if 0 <= ri < len(skill_bank):
+                    skill_bank[ri].content += (
+                        "\n\n[Evolved guidance]\n" + append.strip()
+                    )
+                    return {
+                        "phase": phase,
+                        "action": "refine",
+                        "index": ri,
+                    }
+
+        new = payload.get("new_skill")
+        if isinstance(new, dict) and len(skill_bank) < max_skills:
+            name = (new.get("name") or "").strip()
+            desc = (new.get("description") or "").strip()
+            content = (new.get("content") or "").strip()
+            at = (new.get("action_type") or "INSERT").upper().strip()
+            if name and desc and content and at in _ALLOWED_ACTION_TYPES:
+                skill_bank.append(
+                    MemorySkill(
+                        name=name,
+                        description=desc,
+                        content=content,
+                        action_type=at,
+                    )
+                )
+                return {"phase": phase, "action": "add", "name": name}
+
+        return None
 
     def _build_memskill_system_prompt(self, task: dict[str, Any]) -> str:
         base = self._build_system_prompt(task)

@@ -359,6 +359,11 @@ def smoke_test():
     assert indices_bad == [0, 1], f"Fallback expected [0, 1], got {indices_bad}"
     print("    MemSkill index parsing OK")
 
+    from src.harness.memskill import _extract_json_object
+    jo = _extract_json_object('noise {"noop": true, "x": 1}')
+    assert jo is not None and jo.get("noop") is True
+    print("    MemSkill JSON extract OK")
+
     # -- [8/8] ReAct stricter termination --
     print("\n  [8/8] Testing ReAct termination regex …\n")
     from src.harness.react import _FINISH_RE
