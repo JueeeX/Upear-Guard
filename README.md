@@ -465,7 +465,7 @@ python run_demo.py --tasks 5 --harness react multi_agent --security unprotected 
 ```bibtex
 @article{safeharness2026,
   title={SafeHarness: Lifecycle-Integrated Security Architecture for Safe LLM Agent Deployment},
-  author={Liu, Yang and Chen, Yancheng and Zhang, Shuai and Wu, Yongxuan and Lin, Xixun},
+  author = {Lin, Xixun and Liu, Yang and Chen, Yancheng and Wu, Yongxuan and Ning, Yucheng and Liu, Yilong and Sun, Nan and Chong, Bin and Zhou, Chuan and Cao, Yanan},
   journal={arXiv preprint},
   year={2026}
 }
