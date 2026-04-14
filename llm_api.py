@@ -17,11 +17,8 @@ def _is_insufficient_balance(exc: BaseException) -> bool:
     return "insufficient balance" in str(exc).lower()
 
 BASE_URL = "https://api.deepseek.com"
-# BASE_URL = "https://api.ai.cs.ac.cn/v1"
 ANTHROPIC_BASE_URL = "https://api.deepseek.com"
-# ANTHROPIC_BASE_URL = "https://api.ai.cs.ac.cn"
-API_KEY = "sk-aa6a7a1bd3b7489484c2163f20639fc5"
-# "sk-1LTLm5GPUMWSs20x30dRlP8mrtu4roxhiq8dQfbH8EDKmuuK"
+API_KEY = ""
 
 # SDK 对连接超时、5xx 等可重试错误在 HTTP 层做指数退避重试（默认多为 2 次，此处略调高便于长实验）。
 HTTP_MAX_RETRIES = 5
@@ -42,8 +39,8 @@ def call_llm(messages, model_name, params=None, timeout=3600):
     try:
         if model_name == "gpt-4o-mini-2024-07-18":
             client = OpenAI(
-                base_url="https://api.ai.cs.ac.cn/v1",
-                api_key="sk-1LTLm5GPUMWSs20x30dRlP8mrtu4roxhiq8dQfbH8EDKmuuK",
+                base_url="",
+                api_key="",
                 timeout=timeout,
                 max_retries=HTTP_MAX_RETRIES,
             )
@@ -180,14 +177,14 @@ def call_deepseek_reasoner(messages):
 
 
 MODEL_FUNC_MAP = {
-    "claude_sonnet": call_claude_sonnet,
-    "gpt5.4": call_gpt_5_4,
-    "sonnet4.6": call_claude_sonnet_4_6,
-    "gpt4o": call_gpt4o,
     "deepseek_chat": call_deepseek_chat,
     "deepseek_reasoner": call_deepseek_reasoner,
-    "claude3haiku": call_claude_3_haiku,
+    "gpt5.4": call_gpt_5_4,
+    "gpt4o": call_gpt4o,
     "gpt4omini": call_gpt_4o_mini,
+    "sonnet4.6": call_claude_sonnet_4_6,
+    "claude_sonnet": call_claude_sonnet,
+    "claude3haiku": call_claude_3_haiku,
 }
 
 
