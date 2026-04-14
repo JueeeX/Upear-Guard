@@ -44,7 +44,7 @@ class MapReduceHarness(BaseHarness):
         # Each worker gets its own SimulatedEnvironment to avoid data races
         # on env.history / env.filesystem.  Security pipeline calls are
         # serialised via pipeline_lock because the pipeline carries mutable
-        # cross-layer state (entropy, memory, L3 tier, etc.).
+        # cross-layer state (entropy, memory, L2 Verify tier, etc.).
         pipeline_lock = threading.Lock()
 
         def _worker(st: str) -> str:
@@ -83,8 +83,8 @@ class MapReduceHarness(BaseHarness):
                 sub_results[idx] = future.result()
 
         # ── REDUCE: aggregate ──
-        # Filter each sub-result through L2 before aggregation to catch
-        # any poisoned content that slipped through worker-level checks.
+        # Filter each sub-result through L1 (Inform) before aggregation to
+        # catch any poisoned content that slipped through worker-level checks.
         filtered_sub_results = []
         for r in sub_results:
             if security_pipeline and hasattr(security_pipeline, "filter_context"):

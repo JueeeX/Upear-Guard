@@ -13,9 +13,11 @@ Supports:
 Usage:
     python run_experiment.py                         # full matrix
     python run_experiment.py --subset 50             # quick run with N samples
-    python run_experiment.py --ablation              # ablation study
+    python run_experiment.py --skip-jobs 17958       # resume: skip first N flat jobs
+    python run_experiment.py --only-flat-indices 888,897,898,17956,17957  # run specific flat jobs only
+    python run_experiment.py --ablation --workers 16 # ablation study
     python run_experiment.py --bootstrap             # add CI computation
-    python run_experiment.py --workers 16
+    python run_experiment.py --skip-jobs 16840 --workers 16
 """
 
 from __future__ import annotations
@@ -34,6 +36,8 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from llm_api import InsufficientBalanceError
+
 from src.data_loader import load_subset, load_dataset_local, download_dataset
 from src.tools.registry import build_default_registry, ToolRegistry
 from src.tools.simulated_tools import SimulatedEnvironment
@@ -41,7 +45,7 @@ from src.harness.direct import DirectHarness
 from src.harness.react import ReactHarness
 from src.harness.multi_agent import MultiAgentHarness
 from src.harness.map_reduce import MapReduceHarness
-from src.harness.memory import MemoryHarness
+from src.harness.memskill import MemSkillHarness
 from src.safety import (SecurityPipeline, LlamaFirewallPipeline,
                         SystemPromptDefense, GuardrailPipeline)
 from src.attacks import (context_poisoning, tool_tampering,
@@ -55,7 +59,7 @@ HARNESS_MAP = {
     "react": ReactHarness,
     "multi_agent": MultiAgentHarness,
     "map_reduce": MapReduceHarness,
-    "memory": MemoryHarness,
+    "memskill": MemSkillHarness,
 }
 
 ATTACK_MAP: dict[str, Callable] = {
@@ -99,6 +103,14 @@ class Record:
 def load_config(path: str) -> dict:
     with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+def _append_jsonl(path: Path, record_dict: dict, lock: threading.Lock) -> None:
+    """Append one JSON object per line; safe for concurrent callers sharing *lock*."""
+    line = json.dumps(record_dict, ensure_ascii=False) + "\n"
+    with lock:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line)
 
 
 def build_security_pipeline(mode, registry, config, judge_model,
@@ -171,6 +183,27 @@ def main():
                         help="Run ablation study instead of main experiment")
     parser.add_argument("--bootstrap", action="store_true",
                         help="Compute bootstrap confidence intervals")
+    parser.add_argument(
+        "--skip-jobs",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "Skip the first N entries in the flat jobs list (same order as the "
+            "nested loops). Use to resume after a crash, e.g. if 900 jobs finished "
+            "pass --skip-jobs 900 to start at flat job index 900 (the 901st job)."
+        ),
+    )
+    parser.add_argument(
+        "--only-flat-indices",
+        default=None,
+        metavar="I,J,...",
+        help=(
+            "Run only these 0-based flat job indices (comma-separated), using the "
+            "same ordering as the nested loops in this script. Incompatible with "
+            "--skip-jobs. Appends to experiment_results.jsonl like a normal run."
+        ),
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -185,9 +218,19 @@ def main():
         _run_ablation(cfg, output_dir, max_workers)
         return
 
+    # Incremental JSON Lines log (survives crashes); append to preserve prior runs.
+    jsonl_path = output_dir / "experiment_results.jsonl"
+    if jsonl_path.exists():
+        print(f"[*] Existing {jsonl_path.name} found — new records will be appended.")
+
     subset_size = args.subset or cfg["data"].get("experiment_subset_size",
                                                    cfg["data"]["demo_subset_size"])
-    tasks = load_subset(subset_size)
+    data_cfg = cfg.get("data", {})
+    tasks = load_subset(
+        subset_size,
+        dataset_file=data_cfg.get("dataset_file"),
+        sequential=data_cfg.get("sequential_subset", False),
+    )
     print(f"[*] Loaded {len(tasks)} tasks.")
 
     registry = build_default_registry()
@@ -208,10 +251,50 @@ def main():
                         jobs.append(Job(task, model_name, h_type, s_mode,
                                         atk_type, ATTACK_MAP[atk_type]))
 
-    total = len(jobs)
-    print(f"[*] {total} jobs to run with {max_workers} workers.\n")
+    total_flat = len(jobs)
+    if args.only_flat_indices and args.skip_jobs:
+        parser.error("Use either --only-flat-indices or --skip-jobs, not both.")
+    if args.only_flat_indices:
+        raw = args.only_flat_indices.replace(" ", "")
+        try:
+            want = [int(x) for x in raw.split(",") if x]
+        except ValueError:
+            parser.error("--only-flat-indices must be comma-separated integers.")
+        if not want:
+            parser.error("--only-flat-indices is empty.")
+        bad = [i for i in want if i < 0 or i >= total_flat]
+        if bad:
+            parser.error(
+                f"--only-flat-indices out of range [0, {total_flat - 1}]: {bad[:8]}…"
+                if len(bad) > 8
+                else f"--only-flat-indices out of range [0, {total_flat - 1}]: {bad}"
+            )
+        jobs = [jobs[i] for i in sorted(set(want))]
+        print(
+            f"[*] --only-flat-indices: running {len(jobs)} job(s) "
+            f"(full matrix has {total_flat})."
+        )
+    else:
+        if args.skip_jobs < 0:
+            parser.error("--skip-jobs must be >= 0")
+        if args.skip_jobs > total_flat:
+            parser.error(
+                f"--skip-jobs ({args.skip_jobs}) exceeds flat job count ({total_flat})"
+            )
+        if args.skip_jobs:
+            jobs = jobs[args.skip_jobs:]
+            print(
+                f"[*] Skipping first {args.skip_jobs} flat job(s); "
+                f"{len(jobs)} remaining (full matrix had {total_flat})."
+            )
 
-    results = _execute_jobs(jobs, registry, cfg, judge_model, max_workers)
+    total = len(jobs)
+    print(f"[*] {total} jobs to run with {max_workers} workers.")
+    print(f"[*] Appending each record to {jsonl_path} as jobs finish.\n")
+
+    results = _execute_jobs(
+        jobs, registry, cfg, judge_model, max_workers, jsonl_path=jsonl_path,
+    )
 
     # ── Per-group metrics ──────────────────────────────────────
     _print_metrics_table(results, agent_models, harness_types,
@@ -236,9 +319,17 @@ def main():
 
 def _run_ablation(cfg, output_dir, max_workers):
     """Run ablation study: SafeHarness with individual layers disabled."""
+    jsonl_path = Path(output_dir) / "ablation_results.jsonl"
+    jsonl_path.unlink(missing_ok=True)
+
     abl_cfg = cfg.get("ablation", {})
     subset_size = abl_cfg.get("subset_size", 50)
-    tasks = load_subset(subset_size)
+    data_cfg = cfg.get("data", {})
+    tasks = load_subset(
+        subset_size,
+        dataset_file=data_cfg.get("dataset_file"),
+        sequential=data_cfg.get("sequential_subset", False),
+    )
     print(f"[*] Ablation: {len(tasks)} tasks.")
 
     registry = build_default_registry()
@@ -267,9 +358,12 @@ def _run_ablation(cfg, output_dir, max_workers):
                     ))
 
     total = len(jobs)
-    print(f"[*] Ablation: {total} jobs with {max_workers} workers.\n")
+    print(f"[*] Ablation: {total} jobs with {max_workers} workers.")
+    print(f"[*] Appending each record to {jsonl_path} as jobs finish.\n")
 
-    results = _execute_jobs(jobs, registry, cfg, judge_model, max_workers)
+    results = _execute_jobs(
+        jobs, registry, cfg, judge_model, max_workers, jsonl_path=jsonl_path,
+    )
 
     print("\n  Ablation Results:")
     print("-" * 80)
@@ -288,7 +382,8 @@ def _run_ablation(cfg, output_dir, max_workers):
     _save_results(results, output_dir / "ablation_results.json", cfg)
 
 
-def _execute_jobs(jobs, registry, cfg, judge_model, max_workers):
+def _execute_jobs(jobs, registry, cfg, judge_model, max_workers,
+                  jsonl_path: Path | None = None):
     results: list[Record] = []
     counter = {"done": 0}
     lock = threading.Lock()
@@ -299,13 +394,26 @@ def _execute_jobs(jobs, registry, cfg, judge_model, max_workers):
         with lock:
             counter["done"] += 1
             _print_row(rec, counter["done"], total)
+        if jsonl_path is not None:
+            _append_jsonl(jsonl_path, _rec_dict(rec), lock)
         return rec
 
     t_start = time.time()
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [pool.submit(_submit, job) for job in jobs]
-        for future in as_completed(futures):
-            results.append(future.result())
+        try:
+            for future in as_completed(futures):
+                results.append(future.result())
+        except InsufficientBalanceError as e:
+            print(
+                "\n[!] API 余额不足 (402)，已取消未开始的任务并终止实验。",
+                file=sys.stderr,
+            )
+            try:
+                pool.shutdown(wait=False, cancel_futures=True)
+            except TypeError:
+                pool.shutdown(wait=False)
+            raise
 
     wall_time = time.time() - t_start
     serial_time = sum(r.elapsed_s for r in results)
@@ -456,6 +564,9 @@ def _save_results(results, out_file, cfg):
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(all_dicts, f, ensure_ascii=False, indent=2)
     print(f"\n[*] Results saved → {out_file}")
+    jl = out_file.with_suffix(".jsonl")
+    if jl.exists():
+        print(f"[*] (Incremental log still available at {jl})")
 
 
 def _print_row(r: Record, done: int, total: int):
@@ -514,4 +625,8 @@ def _to_metric_tuples(records, tasks):
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except InsufficientBalanceError as e:
+        print(f"[!] {e}", file=sys.stderr)
+        sys.exit(2)

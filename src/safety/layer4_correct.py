@@ -3,7 +3,8 @@ Layer 4 — Safe Rollback & Recovery  (CORRECT)
 
   * State checkpointing at configurable intervals
   * Attack-triggered rollback to last safe checkpoint
-  * Graceful degradation (reduce tool privileges progressively)
+  * Graceful degradation (reduce tool privileges progressively, 5 levels)
+  * Adaptive recovery (restore one privilege level after sustained safe actions)
 """
 
 from __future__ import annotations
@@ -27,7 +28,8 @@ class Checkpoint:
 
 
 class RollbackLayer:
-    """Manages state checkpoints, rollback, and adaptive degradation/recovery."""
+    """Manages state checkpoints, rollback, and adaptive degradation/recovery
+    (L4 — Correct)."""
 
     def __init__(self, config: dict[str, Any] | None = None,
                  enabled: bool = True):
@@ -69,13 +71,15 @@ class RollbackLayer:
         return cp
 
     def escalate_degradation(self) -> int:
-        """Increase degradation level (reduce privileges).
+        """Increase degradation level (reduce L3 Constrain tier ceiling).
 
           0 = normal (all tiers available)
           1 = destructive tools disabled
           2 = network tools disabled
           3 = execute tools disabled
           4 = write tools disabled (read_only only)
+
+        Actual maximum is capped by ``max_degradation_level`` in config.
         """
         if not self.enabled:
             return 0

@@ -9,29 +9,42 @@ data:
   dataset_name: "thu-coai/Agent-SafetyBench"
   local_dir: "data/agent_safety_bench"
   fallback_url: "https://raw.githubusercontent.com/thu-coai/Agent-SafetyBench/main/data"
+  # First 200 tasks of released_data.json (file order, no shuffle). See released_data_first200.json.
+  dataset_file: "data/agent_safety_bench/released_data_first200.json"
+  sequential_subset: true
   demo_subset_size: 3
   experiment_subset_size: 200
 
 models:
   # Agent and Judge models MUST be different to avoid self-evaluation bias.
-  # Keys must match MODEL_FUNC_MAP in llm_api.py.
+  # Short names must match MODEL_FUNC_MAP in llm_api.py (or use raw gateway model ids if enabled).
   agent_models:
+    # - "sonnet4.6"
+    # - "gpt5.4"
     - "deepseek_chat"
-    - "gpt4o"
-  judge_model: "gpt4o"
+    # - "deepseek_reasoner"
+    # - "claude3haiku"
+  judge_model: "gpt4omini" # "gpt4o" is also supported
+
 
 harness:
   types:
-    - "direct"
+    # - "direct"
     - "react"
     - "multi_agent"
-    - "map_reduce"
-    - "memory"
+    # - "map_reduce"
+    - "memskill"
   react_max_steps: 5
   multi_agent_max_revisions: 2
   map_reduce_max_subtasks: 3
-  memory_max_steps: 5
-  memory_working_capacity: 5
+  memskill_react_steps: 5        # ReAct loop steps in Phase 2
+  memskill_top_k: 3              # number of skills selected per span
+  memskill_retrieve_k: 10        # memories retrieved per turn
+  # Optional: LLM-based skill-bank evolution (add skill or refine existing)
+  memskill_evolve_skills: true
+  memskill_max_skills: 12       # cap total skills (4 defaults + evolved)
+  memskill_evolve_after_phase1: true   # Phase 2 sees evolved bank when true
+  memskill_evolve_end_task: false     # extra LLM call after ReAct; use for logging / future persist
 
 security_modes:
   - "unprotected"
@@ -41,15 +54,12 @@ security_modes:
   - "safe_harness"
 
 safety:
+  # Layer numbering follows the paper:
+  #   layer1 = L1 Inform    (adversarial context filtering)
+  #   layer2 = L2 Verify    (three-tier causal safety verification)
+  #   layer3 = L3 Constrain (privilege-separated tool control)
+  #   layer4 = L4 Correct   (rollback & adaptive degradation/recovery)
   layer1:
-    token_ttl: 600
-    token_max_invocations: 50
-    denied_paths:
-      - "/etc"
-      - "/root"
-    # Tool risk tiers are defined in src/tools/registry.py build_default_registry()
-    # and cannot be overridden from config. See that function for the mapping.
-  layer2:
     always_semantic: false  # set true to run LLM semantic check on every input
     suspicious_patterns:
       - "ignore previous instructions"
@@ -62,9 +72,17 @@ safety:
       - "new role"
       - "override.*(?:policy|instruction)"
       - "act as.*(?:admin|root|sudo)"
-  layer3:
+  layer2:
     tau_low: 0.3
     tau_high: 0.7
+  layer3:
+    token_ttl: 600
+    token_max_invocations: 50
+    denied_paths:
+      - "/etc"
+      - "/root"
+    # Tool risk tiers are defined in src/tools/registry.py build_default_registry()
+    # and cannot be overridden from config. See that function for the mapping.
   layer4:
     checkpoint_interval: 3
     max_degradation_level: 3
@@ -116,3 +134,4 @@ ablation:
   harness_types:
     - "react"
     - "multi_agent"
+    - "memskill"

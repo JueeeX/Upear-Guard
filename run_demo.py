@@ -5,9 +5,10 @@ Quick demo — runs 3 tasks through ALL harness × security combinations
 
 Usage:
     python run_demo.py
-    python run_demo.py --tasks 5
+    python run_demo.py --tasks 3
     python run_demo.py --workers 12
     python run_demo.py --harness direct react --security unprotected safe_harness
+    python run_demo.py --tasks 1 --workers 4 --harness memskill
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ from src.harness.direct import DirectHarness
 from src.harness.react import ReactHarness
 from src.harness.multi_agent import MultiAgentHarness
 from src.harness.map_reduce import MapReduceHarness
-from src.harness.memory import MemoryHarness
+from src.harness.memskill import MemSkillHarness
 from src.safety import (SecurityPipeline, LlamaFirewallPipeline,
                         SystemPromptDefense, GuardrailPipeline)
 from src.attacks import (context_poisoning, indirect_injection,
@@ -47,7 +48,7 @@ HARNESS_MAP = {
     "react": ReactHarness,
     "multi_agent": MultiAgentHarness,
     "map_reduce": MapReduceHarness,
-    "memory": MemoryHarness,
+    "memskill": MemSkillHarness,
 }
 
 ATTACK_MAP: dict[str, Callable] = {
@@ -87,6 +88,13 @@ class Record:
 def load_config(path: str = "config/experiment.yaml") -> dict:
     with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+def _append_jsonl(path: Path, record_dict: dict, lock: threading.Lock) -> None:
+    line = json.dumps(record_dict, ensure_ascii=False) + "\n"
+    with lock:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line)
 
 
 def build_security_pipeline(mode: str, registry: ToolRegistry,
@@ -148,7 +156,10 @@ def _run_job(job: Job, registry: ToolRegistry, cfg: dict,
 
 def main():
     parser = argparse.ArgumentParser(description="SafeHarness Demo (parallel)")
-    parser.add_argument("--tasks", type=int, default=3)
+    parser.add_argument(
+        "--tasks", type=int, default=None,
+        help="How many tasks from the start of the dataset file (default: data.demo_subset_size)",
+    )
     parser.add_argument("--harness", nargs="*", default=None)
     parser.add_argument("--security", nargs="*", default=None)
     parser.add_argument("--workers", type=int, default=None,
@@ -175,7 +186,13 @@ def main():
     # ── 1. Download & load data ────────────────────────────────
     print("\n[1/4] Downloading dataset …")
     download_dataset()
-    tasks = load_subset(args.tasks)
+    data_cfg = cfg.get("data", {})
+    demo_n = args.tasks if args.tasks is not None else data_cfg.get("demo_subset_size", 3)
+    tasks = load_subset(
+        demo_n,
+        dataset_file=data_cfg.get("dataset_file"),
+        sequential=data_cfg.get("sequential_subset", False),
+    )
     print(f"  Loaded {len(tasks)} tasks:")
     for t in tasks:
         print(f"    id={t['id']}  risks={t['risks']}")
@@ -196,7 +213,13 @@ def main():
                         jobs.append(Job(task, h_type, s_mode, atk_name, atk_fn))
 
     total = len(jobs)
-    print(f"\n[2/4] Running {total} jobs with {max_workers} workers …\n")
+    output_dir = Path(cfg["project"]["output_dir"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+    jsonl_path = output_dir / "demo_results.jsonl"
+    jsonl_path.unlink(missing_ok=True)
+
+    print(f"\n[2/4] Running {total} jobs with {max_workers} workers …")
+    print(f"      Appending each record to {jsonl_path} as jobs finish.\n")
 
     # ── 3. Execute in parallel ─────────────────────────────────
     results: list[Record] = []
@@ -208,6 +231,7 @@ def main():
         with lock:
             counter["done"] += 1
             _log_record(rec, counter["done"], total)
+        _append_jsonl(jsonl_path, _record_to_dict(rec), lock)
         return rec
 
     t_start = time.time()
@@ -248,8 +272,6 @@ def main():
     print("-" * 90)
 
     # ── 5. Save results ────────────────────────────────────────
-    output_dir = Path(cfg["project"]["output_dir"])
-    output_dir.mkdir(parents=True, exist_ok=True)
     out_file = output_dir / "demo_results.json"
 
     all_records = sorted(
@@ -271,6 +293,7 @@ def main():
             "summary": summary_table,
         }, f, ensure_ascii=False, indent=2)
     print(f"\n[4/4] Results saved → {out_file}")
+    print(f"      Incremental log: {jsonl_path}")
     print("\nDone!")
 
 

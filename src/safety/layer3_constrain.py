@@ -1,8 +1,8 @@
 """
-Layer 1 — Privilege-Separated Tool Control  (CONSTRAIN)
+Layer 3 — Privilege-Separated Tool Control  (CONSTRAIN)
 
 Enforces platform-level access control:
-  * Tool partitioning by risk tier
+  * Tool partitioning by risk tier (read_only / write / execute / network / destructive)
   * Capability-token validation (time-limited, invocation-capped)
   * Tool-description integrity checks (HMAC signature)
 """
@@ -17,13 +17,13 @@ from src.tools.registry import ToolRegistry, CapabilityToken, verify_signature, 
 
 
 @dataclass
-class L1Decision:
+class L3Decision:
     allowed: bool
     reason: str = ""
 
 
 class PrivilegeSeparationLayer:
-    """Checks every tool invocation against the privilege policy."""
+    """Checks every tool invocation against the privilege policy (L3 — Constrain)."""
 
     TIER_ORDER = ["read_only", "write", "execute", "network", "destructive"]
 
@@ -48,16 +48,16 @@ class PrivilegeSeparationLayer:
             )
             self._tokens[spec.name] = token
 
-    def check(self, tool_name: str, arguments: dict[str, Any]) -> L1Decision:
+    def check(self, tool_name: str, arguments: dict[str, Any]) -> L3Decision:
         if not self.enabled:
-            return L1Decision(True)
+            return L3Decision(True)
 
         spec = self.registry.get(tool_name)
         if spec is None:
-            return L1Decision(False, f"Unknown tool '{tool_name}'.")
+            return L3Decision(False, f"Unknown tool '{tool_name}'.")
 
         if not verify_signature(spec):
-            return L1Decision(False,
+            return L3Decision(False,
                               f"Tool '{tool_name}' description signature mismatch — "
                               "possible tampering.")
 
@@ -65,10 +65,10 @@ class PrivilegeSeparationLayer:
             tool_idx = self.TIER_ORDER.index(spec.risk_tier)
             max_idx = self.TIER_ORDER.index(self.max_allowed_tier)
         except ValueError:
-            return L1Decision(False, f"Invalid tier '{spec.risk_tier}'.")
+            return L3Decision(False, f"Invalid tier '{spec.risk_tier}'.")
 
         if tool_idx > max_idx:
-            return L1Decision(
+            return L3Decision(
                 False,
                 f"Tool '{tool_name}' (tier={spec.risk_tier}) exceeds "
                 f"allowed tier ceiling ({self.max_allowed_tier})."
@@ -78,13 +78,13 @@ class PrivilegeSeparationLayer:
         token = self._tokens.get(tool_name)
         if token is not None:
             if not verify_token_signature(token):
-                return L1Decision(
+                return L3Decision(
                     False,
                     f"Capability token for '{tool_name}' has invalid signature "
                     "— possible token forgery."
                 )
             if not token.is_valid():
-                return L1Decision(
+                return L3Decision(
                     False,
                     f"Capability token for '{tool_name}' expired or exhausted "
                     f"(used {token.invocations_used}/{token.max_invocations})."
@@ -96,14 +96,14 @@ class PrivilegeSeparationLayer:
         path_arg = arguments.get("path", "")
         if path_arg:
             if ".." in path_arg:
-                return L1Decision(
+                return L3Decision(
                     False,
                     f"Path '{path_arg}' contains traversal components.")
             normalised = os.path.normpath(path_arg)
             for dp in denied_paths:
                 dp_norm = os.path.normpath(dp)
                 if normalised == dp_norm or normalised.startswith(dp_norm + os.sep):
-                    return L1Decision(False,
+                    return L3Decision(False,
                                       f"Path '{path_arg}' is in the deny-list.")
 
-        return L1Decision(True)
+        return L3Decision(True)
