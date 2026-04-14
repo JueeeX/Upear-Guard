@@ -5,7 +5,7 @@ Quick demo — runs 3 tasks through ALL harness × security combinations
 
 Usage:
     python run_demo.py
-    python run_demo.py --tasks 5
+    python run_demo.py --tasks 3
     python run_demo.py --workers 12
     python run_demo.py --harness direct react --security unprotected safe_harness
     python run_demo.py --tasks 1 --workers 4 --harness memskill

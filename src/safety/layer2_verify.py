@@ -1,11 +1,11 @@
 """
-Layer 3 — Causal Safety Verification  (VERIFY)
+Layer 2 — Causal Safety Verification  (VERIFY)
 
-Three-tier cascade:
+Three-tier cascade applied to every proposed tool invocation:
 
   Tier 1  Lightweight rule-based compliance check  (every action)
   Tier 2  LLM-based step-level guardrail           (medium+ risk)
-  Tier 3  Counterfactual causal diagnostics         (high risk)
+  Tier 3  Counterfactual causal diagnostics         (high risk / UNCERTAIN)
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ class VerificationDecision:
 
 
 class CausalSafetyVerifier:
-    """Implements the three-tier verification cascade."""
+    """Implements the three-tier verification cascade (L2 — Verify)."""
 
     def __init__(self, config: dict[str, Any] | None = None,
                  judge_model: str | None = None,
@@ -52,8 +52,8 @@ class CausalSafetyVerifier:
 
     def maybe_deescalate(self):
         """Restore the minimum verification tier to 1 (default).
-        Called during L4 adaptive recovery to relax elevated scrutiny
-        after a window of consecutive safe actions."""
+        Called during L4 (Correct) adaptive recovery to relax elevated
+        scrutiny after a window of consecutive safe actions."""
         if self._min_tier > 1:
             self._min_tier = 1
 

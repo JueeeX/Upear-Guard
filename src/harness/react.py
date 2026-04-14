@@ -2,9 +2,10 @@
 ReAct harness — Thought / Action / Observation reasoning loop.
 
 When a security pipeline is active:
-  - Tool outputs (observations) are filtered through L2 to detect
+  - Tool outputs (observations) are filtered through L1 (Inform) to detect
     indirect prompt injection via tool responses.
-  - Each reasoning step is recorded in L3 for multi-step causal analysis.
+  - Each reasoning step is recorded in L2 (Verify) for multi-step causal
+    analysis (record_reasoning).
 """
 
 from __future__ import annotations
@@ -44,8 +45,8 @@ class ReactHarness(BaseHarness):
             response = call_model(self.model_name, messages) or ""
             trace.append({"role": "assistant", "content": response})
 
-            if security_pipeline and hasattr(security_pipeline, 'l3'):
-                security_pipeline.l3.record_reasoning(response)
+            if security_pipeline and hasattr(security_pipeline, 'l2'):
+                security_pipeline.l2.record_reasoning(response)
 
             if _FINISH_RE.search(response):
                 break

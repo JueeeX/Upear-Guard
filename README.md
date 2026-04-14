@@ -36,19 +36,19 @@
 
 ### 为什么恰好是四层？
 
-SafeHarness 的四层设计直接映射到 Agent 执行生命周期的四个不可缺少的阶段。每一层守护一个特定阶段，确保覆盖完整且不冗余：
+SafeHarness 的四层设计覆盖 Agent 执行生命周期的四个不可缺少的阶段。每一层守护一个特定阶段，确保覆盖完整且不冗余：
 
 ```
-Agent 执行生命周期                    SafeHarness 安全层
+Agent 执行生命周期                    SafeHarness 安全层（论文定义顺序）
                                      
 ┌──────────────────┐                ┌─────────────────────────────────────────┐
-│ 1. 信息输入       │ ◄─── 守护 ──── │ L2: INFORM — 对抗性上下文过滤              │
-│ (Input Processing)│                │ → 结构净化 · 语义净化 · 溯源标记            │
+│ 1. 信息输入       │ ◄─── 守护 ──── │ L1: INFORM — 对抗性上下文过滤              │
+│ (Input Processing)│                │ → 结构净化 · 模式检测 · 语义过滤 · 溯源标记  │
 ├──────────────────┤                ├─────────────────────────────────────────┤
-│ 2. 决策推理       │ ◄─── 守护 ──── │ L3: VERIFY — 因果安全验证                  │
+│ 2. 决策推理       │ ◄─── 守护 ──── │ L2: VERIFY — 因果安全验证                  │
 │ (Decision Making) │                │ → Tier1 规则 · Tier2 LLM护栏 · Tier3 因果 │
 ├──────────────────┤                ├─────────────────────────────────────────┤
-│ 3. 动作执行       │ ◄─── 守护 ──── │ L1: CONSTRAIN — 特权分离工具控制            │
+│ 3. 动作执行       │ ◄─── 守护 ──── │ L3: CONSTRAIN — 特权分离工具控制            │
 │ (Action Execution)│                │ → 风险分级 · 能力令牌 · HMAC 签名验证        │
 ├──────────────────┤                ├─────────────────────────────────────────┤
 │ 4. 状态更新       │ ◄─── 守护 ──── │ L4: CORRECT — 安全回滚与恢复               │
@@ -59,16 +59,50 @@ Agent 执行生命周期                    SafeHarness 安全层
                                      → 溯源标记 · 异常检测 · 熵漂移触发
 ```
 
+### 运行时执行路径（Algorithm 1）
+
+论文 Algorithm 1 给出了 SafeHarness 每步的实际执行顺序。它与四层的生命周期映射的关系为：**L1 在输入/观测入口过滤，L3 和 L2 在工具调用边界依次检查（L3 先、L2 后），L4 负责全程快照与事后恢复**：
+
+```mermaid
+flowchart TD
+    subgraph ctxPath ["上下文路径（filter_context，L1 Inform）"]
+        direction LR
+        IN1["用户指令 / 数据集对话<br/>/ fake_history"] --> L1in["L1 过滤"]
+        OBS["工具 observation<br/>/ 子任务结果"] --> L1obs["L1 过滤"]
+    end
+
+    L1in --> Model["LLM 推理"]
+    L1obs --> Model
+    Model --> Parse["解析工具调用<br/>tool + arguments"]
+
+    subgraph actionPath ["工具调用路径（check_action）"]
+        direction TB
+        PA1["L4 maybe_checkpoint<br/>（打快照）"] --> PA2["L3 权限/签名/令牌检查"]
+        PA2 -->|"拒绝"| Block["拦截，返回 blocked"]
+        PA2 -->|"通过"| PA3["L2 分级语义验证<br/>Tier1→2→3"]
+        PA3 -->|"SAFE"| PA4["记忆写入 + 熵检测"]
+        PA3 -->|"UNSAFE（Tier3 确认攻击）"| PA5["L4 rollback + escalate_degradation<br/>+ memory restore"]
+        PA3 -->|"UNSAFE（Tier2）"| PA6["L4 escalate_degradation"]
+        PA4 --> PA7["L4 maybe_recover<br/>（联动 L2 maybe_deescalate）"]
+    end
+
+    Parse --> PA1
+    PA7 --> ExecTool["执行工具"]
+    ExecTool --> OBS
+```
+
+L1 检测到注入（`injection_detected`）时，会通过熵监控器记录违规；若累计熵漂移超过阈值，立即调用 `l2.escalate_verification()` 抬高 L2 最低验证等级；此外在下一次 `check_action` 时，`_last_untrusted` 标志还会触发 `l2.set_min_tier(2)`，确保 L1 信号跨步骤传递给 L2（L1→L2 层间反馈）。
+
 ### 四层必要性论证
 
 | 执行阶段 | 安全层 | 安全属性 | 为什么必要 |
 |----------|--------|----------|-----------|
-| **信息输入** | L2 INFORM | 输入完整性 (Input Integrity) | 若无此层，被投毒的上下文（提示注入、RAG 污染）直接进入 Agent，后续所有层的决策基础都被破坏 |
-| **决策推理** | L3 VERIFY | 行为安全性 (Action Safety) | 即使输入干净，Agent 自身也可能做出不安全决策（实验表明 clean 场景也有 22-56% unsafe 率），需独立验证 |
-| **动作执行** | L1 CONSTRAIN | 最小权限 (Least Privilege) | 即使决策被验证通过，仍需强制执行权限边界——L3 可能被绕过（对抗样本）或误判，L1 提供硬性保障 |
-| **状态更新** | L4 CORRECT | 可恢复性 (Recoverability) | 前三层均有失败可能，最后一道防线保证可回滚到安全状态，且通过自适应降级/恢复平衡安全与效用 |
+| **信息输入** | L1 INFORM | 输入完整性 (Input Integrity) | 若无此层，被投毒的上下文（提示注入、RAG 污染）直接进入 Agent，后续所有层的决策基础都被破坏 |
+| **决策推理** | L2 VERIFY | 行为安全性 (Action Safety) | 即使输入干净，Agent 自身也可能做出不安全决策（实验表明 clean 场景也有 22-56% unsafe 率），需独立验证 |
+| **动作执行** | L3 CONSTRAIN | 最小权限 (Least Privilege) | 即使决策被验证通过，仍需强制执行权限边界——L2 可能被绕过或误判，L3 提供硬性保障 |
+| **状态更新** | L4 CORRECT | 可恢复性 (Recoverability) | 前三层均有失败可能，最后一道防线保证可回滚到安全状态，并通过自适应降级/恢复平衡安全与效用 |
 
-**充分性论证**：四层覆盖了完整的执行生命周期，不存在未被保护的阶段。跨层记忆保护针对持久状态（不属于任何单一阶段的循环），确保状态不被跨步骤污染。
+**充分性论证**：两条路径（上下文路径 L1、工具调用路径 L3+L2+L4）覆盖了 Agent 执行生命周期中所有可被攻击的环节。跨层记忆保护针对持久状态（不属于任何单一阶段的循环），确保状态不被跨步骤污染。
 
 **必要性验证**：消融实验（Ablation Study）通过逐一禁用各层来量化每一层的独立贡献，证明移除任何一层都会导致特定指标显著恶化。
 
@@ -76,21 +110,21 @@ Agent 执行生命周期                    SafeHarness 安全层
 
 | 威胁向量 | 描述 | 主要防御层 | 辅助防御层 |
 |----------|------|-----------|-----------|
-| T1: 直接提示注入 | 用户输入/指令中包含对抗性指令 | L2 (模式过滤+语义净化) | L3 (Tier3 因果诊断) |
-| T2: 间接提示注入 | 工具返回值/RAG 检索内容中嵌入恶意指令 | L2 (observation 过滤) | L3 (因果诊断) |
-| T3: 工具滥用 | Agent 被诱导调用高风险工具 | L1 (权限分级) | L3 (规则+LLM 验证) |
-| T4: 工具描述篡改 | 攻击者修改工具描述以改变 Agent 行为 | L1 (HMAC 签名验证) | L2 (异常检测) |
+| T1: 直接提示注入 | 用户输入/指令中包含对抗性指令 | L1 (模式过滤+语义净化) | L2 (Tier3 因果诊断) |
+| T2: 间接提示注入 | 工具返回值/RAG 检索内容中嵌入恶意指令 | L1 (observation 过滤) | L2 (因果诊断) |
+| T3: 工具滥用 | Agent 被诱导调用高风险工具 | L3 (权限分级) | L2 (规则+LLM 验证) |
+| T4: 工具描述篡改 | 攻击者修改工具描述以改变 Agent 行为 | L3 (HMAC 签名验证) | L1 (异常检测) |
 | T5: 状态/记忆腐蚀 | 攻击者注入虚假对话历史或修改持久状态 | 跨层记忆保护 (溯源+异常) | L4 (回滚) |
-| T6: 权限提升 | Agent 尝试执行超出授权范围的操作 | L1 (能力令牌+分级) | L4 (降级) |
+| T6: 权限提升 | Agent 尝试执行超出授权范围的操作 | L3 (能力令牌+分级) | L4 (降级) |
 
 ### 层间反馈机制
 
-SafeHarness 不是简单的安全层堆叠，各层之间存在主动反馈：
+SafeHarness 不是简单的安全层堆叠，各层之间存在主动反馈（均在 `SecurityPipeline` 中实现，与论文 Figure 1 caption 一致）：
 
-- **L2 检测异常 → L3 升级验证**：当 L2 检测到注入尝试（正则匹配或语义过滤变化超阈值）时，熵监控器记录违规；当熵分数超过阈值，L3 自动从 Tier 1（规则）升级到 Tier 2/3（LLM/因果）验证
-- **L3 确认攻击 → L4 回滚+降级**：当 L3 的 Tier 3 因果诊断判定为注入攻击，L4 立即回滚到最近安全检查点（包括 memory 快照恢复）并升级降级等级
-- **L4 降级 → L1 权限收紧**：L4 的降级等级与 L1 的五级风险体系一一对齐（0=全部 → 4=只读）
-- **L4 自适应恢复 → L3 降级验证**：连续安全操作达到窗口阈值后，L4 自动恢复一级权限，同时 L3 的最低验证级别同步降级，平衡安全与效用
+- **L1 → L2 升级**：`filter_context` 中，若 L1 检测到注入（`injection_detected=True`），熵监控器记录一次违规并将 `_last_untrusted` 置位；若此时熵漂移已超阈值，立即调用 `l2.escalate_verification()` 将 L2 最低验证等级抬高到 Tier 2。在下一次 `check_action` 中，`_last_untrusted` 会进一步触发 `l2.set_min_tier(2)`，确保 L1 的检测信号跨步骤生效。
+- **L2 确认攻击 → L4 回滚+降级**：当 L2 Tier 3 因果诊断判定为 `is_attack=True` 时，`check_action` 立即调用 `l4.rollback()` 恢复最近安全检查点（含 ProtectedMemory 快照）并调用 `l4.escalate_degradation()`；当 L2 Tier 2 判为 UNSAFE（较低置信度）时，同样触发 `escalate_degradation()`，但不回滚。
+- **L4 降级 → L3 权限收紧**：每次 `check_action` 开始时，`l3.max_allowed_tier` 被同步为 `l4.max_allowed_tier()`。L4 的降级等级（0=正常 → 4=只读）与 L3 的五级风险体系一一对齐（destructive → network → execute → write → read_only）；实际可达的最高降级等级受 `config.layer4.max_degradation_level` 配置上限约束。
+- **L4 自适应恢复 → L2 降级验证**：连续安全操作达到 `recovery_window` 阈值后，`l4.maybe_recover()` 降低一级降级等级，同时调用 `l2.maybe_deescalate()` 将 L2 最低验证等级重置为 Tier 1，平衡安全与效用。
 
 ---
 
@@ -109,19 +143,19 @@ SafeHarness/
 │   │   ├── registry.py          # 工具注册、HMAC 签名、风险分级、能力令牌
 │   │   └── simulated_tools.py   # 模拟工具执行环境
 │   ├── harness/
-│   │   ├── base.py              # 抽象基类 & HarnessResult & L2 输入过滤
-│   │   ├── direct.py            # Direct API（含 L2 observation 过滤）
-│   │   ├── react.py             # ReAct 推理循环（含 L2 observation 过滤）
-│   │   ├── multi_agent.py       # Multi-Agent + Critic（含 L2 observation 过滤）
-│   │   ├── map_reduce.py        # Map-Reduce 任务委托（含 L2 observation 过滤）
-│   │   └── memskill.py          # MemSkill 技能条件化记忆构建 + 记忆增强 ReAct
+│   │   ├── base.py              # 抽象基类 & HarnessResult；初始消息构建与工具调用入口（filter_context/check_action 在此被调用）
+│   │   ├── direct.py            # Direct API（单次 LLM 调用；工具输出经 L1 filter_context 过滤）
+│   │   ├── react.py             # ReAct 推理循环（observation 经 L1 过滤；每步调用 l2.record_reasoning）
+│   │   ├── multi_agent.py       # Multi-Agent + Critic（工具输出经 L1 过滤；L2 不记录多步推理历史）
+│   │   ├── map_reduce.py        # Map-Reduce 任务委托（子结果经 L1 过滤；L2 不记录多步推理历史）
+│   │   └── memskill.py          # MemSkill 技能条件化记忆构建 + 记忆增强 ReAct（同 ReAct，调用 l2.record_reasoning）
 │   ├── safety/
 │   │   ├── __init__.py          # SecurityPipeline / LlamaFirewallPipeline /
 │   │   │                        # SystemPromptDefense / GuardrailPipeline
-│   │   ├── layer1_privilege.py  # Layer 1: 特权分离 + 能力令牌
-│   │   ├── layer2_filtering.py  # Layer 2: 对抗性上下文过滤
-│   │   ├── layer3_verification.py # Layer 3: 三级因果安全验证
-│   │   ├── layer4_rollback.py   # Layer 4: 安全回滚 + 自适应降级/恢复
+│   │   ├── layer1_inform.py     # L1 Inform: 对抗性上下文过滤（结构净化·模式检测·语义过滤·溯源）
+│   │   ├── layer2_verify.py     # L2 Verify: 三级因果安全验证（Tier1 规则·Tier2 LLM·Tier3 因果）
+│   │   ├── layer3_constrain.py  # L3 Constrain: 特权分离工具控制（风险分级·令牌·HMAC）
+│   │   ├── layer4_correct.py    # L4 Correct: 安全回滚 + 自适应降级/恢复
 │   │   └── memory_protection.py # 跨层记忆保护 & 熵监控
 │   ├── attacks/
 │   │   ├── context_poisoning.py   # A1: 上下文投毒（8 种 payload 变体）
@@ -191,22 +225,21 @@ python run_experiment.py --subset 200 --workers 16
 
 | 维度 | 选项 |
 |------|------|
-| **Harness 配置** | Direct API · ReAct · Multi-Agent+Critic · Map-Reduce · MemSkill |
+| **Harness 配置** | ReAct · Multi-Agent · MemSkill |
 | **安全模式** | Unprotected · System-Prompt · Guardrail · LlamaFirewall · SafeHarness |
 | **攻击类型** | Clean · Context Poisoning · Indirect Injection · Tool Tampering · Memory Injection · Composite |
-| **Agent 模型** | gpt5.4（默认）· deepseek_chat（可选） |
+| **Agent 模型** | deepseek_chat（当前 yaml 默认）· gpt5.4 · sonnet4.6 等（可在 `config/experiment.yaml` 的 `agent_models` 列表中切换） |
 | **Judge 模型** | gpt4omini（默认）· gpt4o（可选，与 Agent 分离） |
 
 ### Harness 配置说明
 
-| Harness | 执行形态 | 评测关注点 |
-|---------|----------|------------|
-| **Direct** | 单次模型调用，至多一轮工具执行 | 交互链最短，适合作为「无多步推理」对照；对间接注入的暴露主要在一次 observation |
-| **ReAct** | Thought / Action / Observation 多步循环，直至 FINISH | 多轮推理与工具观测并存，典型考察 L2 对 observation、L3 对逐步推理的覆盖 |
-| **Multi-Agent** | Primary 生成 + Critic 审核，可带修订轮次 | 多角色与修订链增加语义空间；适合检验跨角色上下文与安全反馈是否被安全管线感知 |
-| **Map-Reduce** | 分解子任务 → 并行求解 → 聚合输出 | 子任务与聚合阶段均可能引入或放大风险；关注跨子结果与归并阶段的过滤与一致性 |
-| **MemSkill** | 先基于 span 做技能条件化记忆构建，再执行记忆增强的 ReAct | 显式记忆读写与检索，攻击面含记忆质量与检索依赖；与「仅对话、无结构化记忆库」的 Harness 形成对照 |
+| Harness | 执行形态 | 安全管线调用方式 | 评测关注点 |
+|---------|----------|-----------------|------------|
+| **ReAct** | Thought / Action / Observation 多步循环，直至 FINISH | 每步调用 `l2.record_reasoning()` 记录推理文本，供 L2 Tier 2/3 做多步因果分析；observation 经 `filter_context`（L1）过滤 | 多轮推理与工具观测并存，典型考察 L1 对 observation 注入、L3+L2 对工具调用的联合防御 |
+| **Multi-Agent** | Primary 生成 + Critic 审核，可带修订轮次 | 工具输出经 `filter_context`（L1）过滤；工具调用经 `check_action`（L3→L2）验证；**不调用** `l2.record_reasoning`，L2 Tier 2/3 不带多步推理历史 | 多角色与修订链增加语义空间；适合检验跨角色上下文与安全反馈是否被安全管线感知 |
+| **MemSkill** | 先基于 span 做技能条件化记忆构建，再执行记忆增强的 ReAct | 同 ReAct，Phase 2 每步调用 `l2.record_reasoning()`；observation 与记忆更新均经 `filter_context`（L1） | 显式记忆读写与检索，攻击面含记忆质量与检索依赖；与「仅对话、无结构化记忆库」的 Harness 形成对照 |
 
+> **提示**：本仓库代码中的 **MemSkill** Harness 与论文中的 **Self-Evolving**（自进化 Agent / *Self-Evolving Agents*）为同一套设定下的对应命名。
 
 ### 安全基线说明
 
@@ -222,9 +255,9 @@ python run_experiment.py --subset 200 --workers 16
 
 | 攻击 | 目标层 | 描述 | 参考 |
 |------|--------|------|------|
-| **A1: Context Poisoning** | L2 | 在指令中注入对抗性指令（8 种变体） | OWASP LLM01 |
-| **A2: Indirect Injection** | L2 | 通过工具返回值注入恶意指令（模拟 RAG 投毒） | Greshake et al. 2023 |
-| **A3: Tool Tampering** | L1 | 篡改工具描述 + HMAC 签名失效 | - |
+| **A1: Context Poisoning** | L1 | 在指令中注入对抗性指令（8 种变体） | OWASP LLM01 |
+| **A2: Indirect Injection** | L1 | 通过工具返回值注入恶意指令（模拟 RAG 投毒） | Greshake et al. 2023 |
+| **A3: Tool Tampering** | L3 | 篡改工具描述 + HMAC 签名失效 | - |
 | **A4: Memory Injection** | 跨层 | 注入虚假对话历史伪造预授权 | - |
 | **A5: Composite** | 多层 | A1+A2+A3+A4 四种攻击同时施加 | - |
 
@@ -278,10 +311,10 @@ python run_experiment.py --subset 200 --workers 16
 
 所有参数均在 `config/experiment.yaml` 中配置，包括：
 
-- **models**: Agent 模型列表和 Judge 模型（必须不同以避免自我评估偏差；当前默认 `gpt5.4` + `gpt4omini`）
+- **models**: Agent 模型列表和 Judge 模型（必须不同以避免自我评估偏差；当前 yaml 中 Agent 为 `deepseek_chat`、Judge 为 `gpt4omini`，可按需修改）
 - **harness**: Harness 类型列表及各类型参数
 - **security_modes**: 5 种安全模式
-- **safety**: 各层参数（L1 令牌配置、L2 可疑模式、L3 阈值、L4 检查点间隔与恢复窗口）
+- **safety**: 各层参数（L1 可疑模式、L2 阈值、L3 令牌配置、L4 检查点间隔与恢复窗口）
 - **attacks**: 5 种攻击类型
 - **ablation**: 消融实验配置（禁用层列表、子集大小、Harness 类型）
 - **evaluation**: Bootstrap 采样数等
@@ -297,7 +330,7 @@ python run_experiment.py --subset 200 --workers 16
 - Harness：3（`react`, `multi_agent`, `memskill`）
 - Security Mode：5
 - Attack Condition：6（clean + A1-A5，clean 在代码中自动加入）
-- Agent Model：1（`gpt5.4`，与下文成本表 Agent 单价一致；若改用 `deepseek_chat` 等其它模型需替换费率）
+- Agent Model：1（当前 yaml 中为 `deepseek_chat`；下文成本表以 `gpt5.4` 为示例单价，使用不同模型时请替换费率）
 
 主实验 job 数：
 
@@ -319,25 +352,25 @@ python run_experiment.py --subset 200 --workers 16
 
 ### API 调用量（与实现对齐的粗算）
 
-以下指 **`call_model` → Agent 模型** 的次数（见 `src/harness/*.py`）；每 job 另有 **1 次** `call_judge`（`src/evaluation/llm_judge.py`）。在 **`safe_harness`** 下，L2 语义过滤与 L3 Tier 2/3 还会对 **`judge_model`** 额外调用 `call_model`（`src/safety/layer2_filtering.py`、`layer3_verification.py`），不计入下表「Harness 侧」次数。
+以下指 **`call_model` → Agent 模型** 的次数（见 `src/harness/*.py`）；每 job 另有 **1 次** `call_judge`（`src/evaluation/llm_judge.py`）。在 **`safe_harness`** 下，L1 语义过滤与 L2 Tier 2/3 还会对 **`judge_model`** 额外调用 `call_model`（`src/safety/layer1_inform.py`、`layer2_verify.py`），不计入下表「Harness 侧」次数。
 
 - **ReAct**（`src/harness/react.py`）：每步一次 Agent 调用，至多 `react_max_steps`（默认 **5**）次；提前 `FINISH` 则更少。
 - **Multi-Agent**（`src/harness/multi_agent.py`）：每轮「Primary + Critic」，Critic 也走 **同一 Agent 模型**；`multi_agent_max_revisions` 默认 2 时，至多 **5** 次 Agent 调用（两轮完整 critic + 最后一轮仅 primary）。
 - **MemSkill**（`src/harness/memskill.py`）：随 `task["dialog"]` 分段出的 span 数与是否提前结束变化较大。Phase 1 每个 span 约 2 次（选技能 + 执行器）；Phase 2 每 ReAct 步 1 次，若做增量记忆更新则每步最多再 2 次；`memskill_evolve_skills` 且 `memskill_evolve_after_phase1` 时再 +1。无 span 时约等于「仅 Phase 2 ReAct」，可低至约 **5** 次 Agent 调用。
 
-粗算示例（不含 `safe_harness` 下 L2/L3 对 `judge_model` 的额外调用）：若 Harness 侧 Agent 调用按三种类型分别约 **3 / 3 / 10** 次取混合中位、每 job 再加 **1** 次评测 Judge，则单次 job 约 **~7** 次 LLM 调用；主实验 **18,000** jobs 则约 **18,000×7 ≈ 1.26×10⁵** 量级。MemSkill 随 span 与增量记忆路径变化大，**safe_harness** 还会显著增加 **Judge 侧**调用。
+粗算示例（不含 `safe_harness` 下 L1/L2 对 `judge_model` 的额外调用）：若 Harness 侧 Agent 调用按三种类型分别约 **3 / 3 / 10** 次取混合中位、每 job 再加 **1** 次评测 Judge，则单次 job 约 **~7** 次 LLM 调用；主实验 **18,000** jobs 则约 **18,000×7 ≈ 1.26×10⁵** 量级。MemSkill 随 span 与增量记忆路径变化大，**safe_harness** 还会显著增加 **Judge 侧**调用。
 
 总 call 数请以网关或日志中的 `usage` 为准。
 
-### 成本估算（CNY，按你给的单价）
+### 成本估算（CNY，示例单价）
 
-当前 `experiment.yaml` 中 Agent 为 **`gpt5.4`**、Judge 为 **`gpt4omini`**，与下表一致。
+> 当前 `experiment.yaml` 中 Agent 为 **`deepseek_chat`**，实际费率以所选模型为准。下表以 **`gpt5.4`** 为 Agent 示例，若切换为其它模型请替换 Agent 侧输入/输出单价；Judge 侧仍为 `gpt4omini`。
 
-计价（CNY / 1M tokens）——对应 `llm_api.py` 中 **`gpt5.4`** → `gpt-5.4-2026-03-05`、**`gpt4omini`** → `gpt-4o-mini-2024-07-18`：
-- Agent (`gpt5.4`)：输入 15.750，输出 94.500
-- Judge（`gpt4omini`，与「gpt-4o-mini」同档）：输入 0.945，输出 3.780
+示例计价（CNY / 1M tokens）——对应 `llm_api.py` 中 **`gpt5.4`** → `gpt-5.4-2026-03-05`、**`gpt4omini`** → `gpt-4o-mini-2024-07-18`：
+- Agent 示例（`gpt5.4`）：输入 15.750，输出 94.500
+- Judge（`gpt4omini`）：输入 0.945，输出 3.780
 
-**「Judge tokens」在本项目中**应计入所有走 **`judge_model`** 的调用：最终评测（`call_judge`）、以及启用时的 L2 语义过滤 / L3 Tier 2–3（均使用 `call_model(judge_model, …)`）。下表若只按「评测一次」估 Judge tokens，在 **`safe_harness`** 下会**偏低**。
+**「Judge tokens」在本项目中**应计入所有走 **`judge_model`** 的调用：最终评测（`call_judge`）、以及启用时的 L1 语义过滤 / L2 Tier 2–3（均使用 `call_model(judge_model, …)`）。下表若只按「评测一次」估 Judge tokens，在 **`safe_harness`** 下会**偏低**。
 
 单个 job 成本（上表两类模型；若 Agent 改用其它模型请替换 Agent 侧输入/输出单价）：
 
@@ -357,7 +390,7 @@ Cost_job(CNY) =
 | 中位 | 1200 / 400 | 800 / 120 | ~0.058 CNY | ~1,251 CNY |
 | 偏高 | 1800 / 700 | 1200 / 180 | ~0.096 CNY | ~2,080 CNY |
 
-> 注：成本对 **Agent 输出 token** 最敏感（单价最高）。如需压成本，优先控制 ReAct / MemSkill 步数、减少冗长输出与无效工具回合；**safe_harness** 下还需为 L2/L3 预留 **`judge_model` 额度**。
+> 注：成本对 **Agent 输出 token** 最敏感（单价最高）。如需压成本，优先控制 ReAct / MemSkill 步数、减少冗长输出与无效工具回合；**safe_harness** 下还需为 L1/L2 预留 **`judge_model` 额度**。
 
 ### 运行命令
 
@@ -398,7 +431,7 @@ python run_demo.py --tasks 5 --harness react multi_agent --security unprotected 
   - *Phase 1 — 记忆构建*：将先验对话/上下文切分为文本段（span），每段通过 LLM Controller 选择 Top-K 技能，再由 LLM Executor 在一次调用中生成技能引导的记忆更新
   - *Phase 2 — 记忆增强 ReAct*：在标准 Thought / Action / Observation 循环中，每轮注入从 Memory Bank 检索的相关记忆；每次新 Observation 后触发增量记忆更新
 - **可选技能库轻量自进化**（非论文中的训练式 Designer）：在 `memskill_evolve_skills: true` 时，可在 Phase 1 结束后（及可选地在整段任务结束后）额外调用 LLM，根据当前技能目录、Memory Bank 与 trace 提议 **新增一条技能** 或 **向现有技能的 `content` 追加指导**；进化后的技能库在 Phase 2 中生效。结果记录在 `metadata.skill_evolution_log` 与 trace 中的 `memskill_skill_evolution` 条目。默认关闭，且不包含跨任务持久化。
-- **安全集成**：与 SafeHarness 四层安全机制完全兼容——工具输出经 L2 过滤，推理步骤记录至 L3，工具调用经 L1 权限检查
+- **安全集成**：与 SafeHarness 四层安全机制完全兼容——工具输出经 L1（`filter_context`）过滤，Phase 2 每步推理文本通过 `l2.record_reasoning()` 记录，工具调用经 `check_action` 按 L3→L2 顺序验证（L3 权限/签名在前，L2 语义验证在后）
 - **配置项**：`memskill_react_steps`（Phase 2 步数）、`memskill_top_k`（每段选择技能数）、`memskill_retrieve_k`（每轮检索记忆数）；自进化相关：`memskill_evolve_skills`（总开关）、`memskill_max_skills`（技能总数上限）、`memskill_evolve_after_phase1`（Phase 1 后进化，使 Phase 2 使用新库）、`memskill_evolve_end_task`（任务结束后再进化一次，多用于记录或后续扩展持久化）
 
 > 参考：Zhang et al., "MemSkill: Learning and Evolving Memory Skills for Self-Evolving Agents", arXiv:2602.02474, Feb 2026.
@@ -406,10 +439,10 @@ python run_demo.py --tasks 5 --harness react multi_agent --security unprotected 
 ### v0.2 (2026-04)
 
 **核心逻辑修复**
-- **L2 语义过滤反馈闭环**：LLM 语义过滤的结果现在正确反馈到 `injection_detected` 和 provenance 标记（通过检测文本变化率），确保 L2→L3 层间升级在 `always_semantic` 模式下有效
+- **L1 语义过滤反馈闭环**：LLM 语义过滤的结果现在正确反馈到 `injection_detected` 和 provenance 标记（通过检测文本变化率），确保 L1→L2 层间升级在 `always_semantic` 模式下有效
 - **L2 来源感知信任级别**：不同来源类型（user_input/tool_output/retrieved/inter_agent）现在有差异化的默认信任级别
 - **L4 Memory 快照**：Checkpoint 现在包含 ProtectedMemory 快照，回滚时同步恢复 memory 状态，防止记忆腐蚀跨越回滚边界
-- **L4 降级映射对齐**：降级等级从 3 级扩展为 5 级，与 L1 的五级风险体系一一对齐（destructive → network → execute → write → read_only）
+- **L4 降级映射对齐**：降级等级支持 0–4 共 5 级，与 L1 的五级风险体系一一对齐（0=destructive → 4=read_only）；实际可达最高等级由 `config.layer4.max_degradation_level` 约束（当前 yaml 默认值为 3，即最高收紧到 `write` 层，不会到达 `read_only`）
 - **L3 双向可调**：新增 `maybe_deescalate()` 方法，在 L4 自适应恢复时联动降级 L3 的最低验证级别
 - **L1 路径遍历防护**：路径检查现在拒绝包含 `..` 的路径并使用 `os.path.normpath` 规范化
 

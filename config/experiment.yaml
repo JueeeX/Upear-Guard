@@ -19,8 +19,11 @@ models:
   # Agent and Judge models MUST be different to avoid self-evaluation bias.
   # Short names must match MODEL_FUNC_MAP in llm_api.py (or use raw gateway model ids if enabled).
   agent_models:
-    - "gpt5.4"
-    # - "deepseek_chat"
+    # - "sonnet4.6"
+    # - "gpt5.4"
+    - "deepseek_chat"
+    # - "deepseek_reasoner"
+    # - "claude3haiku"
   judge_model: "gpt4omini" # "gpt4o" is also supported
 
 
@@ -51,15 +54,12 @@ security_modes:
   - "safe_harness"
 
 safety:
+  # Layer numbering follows the paper:
+  #   layer1 = L1 Inform    (adversarial context filtering)
+  #   layer2 = L2 Verify    (three-tier causal safety verification)
+  #   layer3 = L3 Constrain (privilege-separated tool control)
+  #   layer4 = L4 Correct   (rollback & adaptive degradation/recovery)
   layer1:
-    token_ttl: 600
-    token_max_invocations: 50
-    denied_paths:
-      - "/etc"
-      - "/root"
-    # Tool risk tiers are defined in src/tools/registry.py build_default_registry()
-    # and cannot be overridden from config. See that function for the mapping.
-  layer2:
     always_semantic: false  # set true to run LLM semantic check on every input
     suspicious_patterns:
       - "ignore previous instructions"
@@ -72,9 +72,17 @@ safety:
       - "new role"
       - "override.*(?:policy|instruction)"
       - "act as.*(?:admin|root|sudo)"
-  layer3:
+  layer2:
     tau_low: 0.3
     tau_high: 0.7
+  layer3:
+    token_ttl: 600
+    token_max_invocations: 50
+    denied_paths:
+      - "/etc"
+      - "/root"
+    # Tool risk tiers are defined in src/tools/registry.py build_default_registry()
+    # and cannot be overridden from config. See that function for the mapping.
   layer4:
     checkpoint_interval: 3
     max_degradation_level: 3
@@ -92,7 +100,7 @@ attacks:
     - "composite"
 
 parallel:
-  max_workers: 16
+  max_workers: 8
 
 evaluation:
   llm_judge:
@@ -126,3 +134,4 @@ ablation:
   harness_types:
     - "react"
     - "multi_agent"
+    - "memskill"

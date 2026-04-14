@@ -13,6 +13,56 @@ from src.tools.simulated_tools import SimulatedEnvironment, ToolCall
 from src.tools.registry import ToolRegistry
 
 
+def _append_dataset_turn(
+    messages: list[dict[str, Any]],
+    msg: dict[str, Any],
+    *,
+    filter_fn: Any | None,
+    source: str,
+) -> None:
+    """Append one turn from ``dialog`` / ``_fake_history`` in OpenAI Chat Completions shape.
+
+    Agent-SafetyBench stores native function-calling transcripts (assistant
+    ``tool_calls`` + ``tool`` with ``tool_call_id``). Passing only
+    ``role``+``content`` drops ``tool_calls`` and causes 400 errors:
+    *tool* must follow an assistant message that includes *tool_calls*.
+    """
+    role = msg.get("role", "user")
+    raw = msg.get("content")
+    if raw is None:
+        raw = ""
+    content: str = raw
+    if filter_fn:
+        content = filter_fn(content, source=source)
+
+    if role == "assistant" and msg.get("tool_calls"):
+        entry: dict[str, Any] = {
+            "role": "assistant",
+            "tool_calls": msg["tool_calls"],
+        }
+        if content:
+            entry["content"] = content
+        messages.append(entry)
+        return
+
+    if role == "tool":
+        tcid = msg.get("tool_call_id")
+        if not tcid:
+            messages.append({
+                "role": "user",
+                "content": f"[prior tool output]\n{content}",
+            })
+            return
+        messages.append({
+            "role": "tool",
+            "tool_call_id": tcid,
+            "content": content,
+        })
+        return
+
+    messages.append({"role": role, "content": content})
+
+
 @dataclass
 class HarnessResult:
     """Outcome of running one task through a harness."""
@@ -91,7 +141,7 @@ class BaseHarness(ABC):
     def _build_initial_messages(
         self, task: dict[str, Any], system_prompt: str,
         security_pipeline: Any | None = None,
-    ) -> list[dict[str, str]]:
+    ) -> list[dict[str, Any]]:
         """Build the initial message list for an LLM call.
 
         Message order:
@@ -99,7 +149,7 @@ class BaseHarness(ABC):
           2. ``task["dialog"]`` — pre-existing conversation context from the
              dataset (e.g. Agent-SafetyBench multi-turn scenarios)
           3. ``task["_fake_history"]`` — injected by the memory-injection
-             attack; filtered through L2 when the security pipeline is active
+             attack; filtered through L1 (Inform) when the security pipeline is active
           4. The real user instruction
         """
         if security_pipeline and hasattr(security_pipeline, "augment_system_prompt"):
@@ -109,22 +159,15 @@ class BaseHarness(ABC):
         if security_pipeline and hasattr(security_pipeline, "filter_context"):
             _filter = security_pipeline.filter_context
 
-        messages: list[dict[str, str]] = [
+        messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
         ]
 
         for msg in (task.get("dialog") or []):
-            content = msg.get("content", "")
-            role = msg.get("role", "user")
-            if _filter:
-                content = _filter(content, source="dialog")
-            messages.append({"role": role, "content": content})
+            _append_dataset_turn(messages, msg, filter_fn=_filter, source="dialog")
 
         for msg in (task.get("_fake_history") or []):
-            content = msg["content"]
-            if _filter:
-                content = _filter(content, source="inter_agent")
-            messages.append({"role": msg["role"], "content": content})
+            _append_dataset_turn(messages, msg, filter_fn=_filter, source="inter_agent")
 
         instruction = task["instruction"]
         if _filter:

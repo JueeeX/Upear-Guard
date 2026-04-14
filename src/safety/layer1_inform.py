@@ -1,12 +1,16 @@
 """
-Layer 2 — Adversarial Context Filtering  (INFORM)
+Layer 1 — Adversarial Context Filtering  (INFORM)
 
 Three-stage sanitisation pipeline applied to all external content
 entering the agent's context:
 
   Stage 1  Structural:  strip hidden-character tricks
-  Stage 2  Semantic:    detect & remove injected instructions (via LLM)
-  Stage 3  Provenance:  tag every content chunk with its source
+  Stage 2  Pattern:     detect injected instructions via regex heuristics
+  Stage 3  Semantic:    LLM-aided semantic filtering (optional)
+
+Each content chunk is annotated with a provenance tag recording its
+source type and assigned trust level, enabling downstream layers to
+adjust their verification rigor accordingly.
 """
 
 from __future__ import annotations
@@ -35,7 +39,7 @@ class FilteredContent:
 
 
 class AdversarialContextFilter:
-    """Runs content through the three-stage pipeline."""
+    """Runs content through the three-stage pipeline (L1 — Inform)."""
 
     def __init__(self, config: dict[str, Any] | None = None,
                  judge_model: str | None = None,

@@ -21,7 +21,8 @@ guidance to an existing skill — lightweight self-adaptation, not the paper's
 trained designer loop.
 
 When a security pipeline is active, tool outputs (observations) are filtered
-through L2, and reasoning steps are recorded in L3 — identical to ReAct.
+through L1 (Inform), and reasoning steps are recorded in L2 (Verify) via
+record_reasoning — identical to ReAct.
 
 Reference:
   Zhang et al., "MemSkill: Learning and Evolving Memory Skills for
@@ -260,8 +261,8 @@ class MemSkillHarness(BaseHarness):
             response = call_model(self.model_name, augmented_msgs) or ""
             trace.append({"role": "assistant", "content": response})
 
-            if security_pipeline and hasattr(security_pipeline, 'l3'):
-                security_pipeline.l3.record_reasoning(response)
+            if security_pipeline and hasattr(security_pipeline, 'l2'):
+                security_pipeline.l2.record_reasoning(response)
 
             if _FINISH_RE.search(response):
                 break
