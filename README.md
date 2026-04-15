@@ -234,7 +234,7 @@ python run_experiment.py --subset 200 --workers 16
 ```bibtex
 @article{safeharness2026,
   title={SafeHarness: Lifecycle-Integrated Security Architecture for Safe LLM Agent Deployment},
-  author = {Lin, Xixun and Liu, Yang and Chen, Yancheng and Wu, Yongxuan and Ning, Yucheng and Liu, Yilong and Sun, Nan and Chong, Bin and Zhou, Chuan and Cao, Yanan},
+  author = {Lin, Xixun and Liu, Yang and Chen, Yancheng and Wu, Yongxuan and Ning, Yucheng and Liu, Yilong and Sun, Nan and Zhang, Shun and Chong, Bin and Zhou, Chuan and Cao, Yanan and Guo, Li},
   journal={arXiv preprint},
   year={2026}
 }
