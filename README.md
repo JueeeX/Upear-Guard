@@ -1,6 +1,16 @@
-# SafeHarness — 面向 Agent 安全的 Harness 架构设计框架
+# SafeHarness
 
-> **SafeHarness: Security-Aware Harness Architecture for Safe AI Agent Deployment**
+[![arXiv](https://img.shields.io/badge/arXiv-2604.13630-b31b1b.svg)](https://arxiv.org/abs/2604.13630)
+
+**SafeHarness: Lifecycle-Integrated Security Architecture for LLM-based Agent Deployment**
+
+Xixun Lin\*, Yang Liu\*, Yancheng Chen\*, Yongxuan Wu, Yucheng Ning, Yilong Liu, Nan Sun, Shun Zhang, Bin Chong, Chuan Zhou, Yanan Cao, Li Guo
+
+(\* Equal contribution)
+
+> SafeHarness is a unified security architecture that natively embeds safety mechanisms into the execution lifecycle of LLM-based agent harnesses. It implements a four-layer defense model — Inform, Verify, Constrain, Correct — with cross-layer feedback and memory protection, achieving lifecycle-aligned security across diverse agent execution paradigms (ReAct, Multi-Agent, Map-Reduce, MemSkill, etc.).
+
+---
 
 本项目实现了论文中提出的 SafeHarness 框架——一个将安全机制原生嵌入 Agent Harness 执行生命周期的统一安全架构。
 
@@ -194,13 +204,30 @@ SafeHarness/
 pip install -r requirements.txt
 ```
 
-### 2. 运行 Demo
+### 2. 配置 API Key
+
+复制 `.env.example` 为 `.env`，填入对应的 API Key：
+
+```bash
+cp .env.example .env
+# 编辑 .env 填入 OPENAI_API_KEY / ANTHROPIC_API_KEY / DEEPSEEK_API_KEY
+```
+
+或直接设置环境变量：
+
+```bash
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
+export DEEPSEEK_API_KEY="sk-..."
+```
+
+### 3. 运行 Demo
 
 ```bash
 python run_demo.py
 ```
 
-### 3. 运行完整实验
+### 4. 运行完整实验
 
 ```bash
 # 200 条数据，按当前 config 矩阵运行
@@ -213,7 +240,7 @@ python run_experiment.py --ablation
 python run_experiment.py --subset 100 --bootstrap
 ```
 
-### 4. 自定义运行
+### 5. 自定义运行
 
 ```bash
 # 只跑 direct + react，只比较 unprotected 和 safe_harness
@@ -225,17 +252,17 @@ python run_experiment.py --subset 200 --workers 16
 
 ---
 
----
-
 ## 引用
 
 如果使用本框架，请引用：
 
 ```bibtex
 @article{safeharness2026,
-  title={SafeHarness: Lifecycle-Integrated Security Architecture for Safe LLM Agent Deployment},
-  author = {Lin, Xixun and Liu, Yang and Chen, Yancheng and Wu, Yongxuan and Ning, Yucheng and Liu, Yilong and Sun, Nan and Chong, Bin and Zhou, Chuan and Cao, Yanan},
-  journal={arXiv preprint},
+  title={SafeHarness: Lifecycle-Integrated Security Architecture for LLM-based Agent Deployment},
+  author={Lin, Xixun and Liu, Yang and Chen, Yancheng and Wu, Yongxuan and Ning, Yucheng and Liu, Yilong and Sun, Nan and Zhang, Shun and Chong, Bin and Zhou, Chuan and Cao, Yanan and Guo, Li},
+  journal={arXiv preprint arXiv:2604.13630},
+  eprint={2604.13630},
+  archivePrefix={arXiv},
   year={2026}
 }
 ```

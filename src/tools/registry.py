@@ -10,13 +10,18 @@ Every tool is registered with:
 import hashlib
 import hmac
 import json
+import logging
 import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
+_logger = logging.getLogger(__name__)
+
 HMAC_SECRET = os.environ.get("SAFEHARNESS_HMAC_SECRET", "safe-harness-default-key")
+if "SAFEHARNESS_HMAC_SECRET" not in os.environ:
+    _logger.debug("SAFEHARNESS_HMAC_SECRET not set; using default development key.")
 
 
 @dataclass

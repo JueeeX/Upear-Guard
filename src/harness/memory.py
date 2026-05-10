@@ -81,8 +81,8 @@ class MemoryHarness(BaseHarness):
             response = call_model(self.model_name, messages) or ""
             trace.append({"role": "assistant", "content": response})
 
-            if security_pipeline and hasattr(security_pipeline, "l3"):
-                security_pipeline.l3.record_reasoning(response)
+            if security_pipeline and hasattr(security_pipeline, "l2"):
+                security_pipeline.l2.record_reasoning(response)
 
             if _FINISH_RE.search(response):
                 break

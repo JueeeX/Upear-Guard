@@ -21,6 +21,10 @@ MODEL_FUNC_MAP_NAMES: dict[str, str] = {
     "gpt4omini": "gpt-4o-mini-2024-07-18",
     "gpt5.4": "gpt-5.4-2026-03-05",
     "deepseek_chat": "deepseek-chat",
+    "deepseek_reasoner": "deepseek-reasoner",
+    "sonnet4.6": "claude-sonnet-4-6",
+    "claude_sonnet": "claude-sonnet-4-5-20250929",
+    "claude3haiku": "claude-3-haiku-20240307",
 }
 
 
@@ -44,11 +48,13 @@ def call_judge(messages: list[dict], judge_model: str | None = None,
 
     If *judge_model* is None, falls back to the first available model.
     When *temperature* is provided, it is forwarded to the underlying
-    API call via ``llm_api.call_llm(..., params={"temperature": ...})``.
+    API call.
     """
     model = judge_model or available_models()[0]
     if temperature is not None:
         actual_model = MODEL_FUNC_MAP_NAMES.get(model, model)
+        if actual_model.startswith("claude-"):
+            return llm_api.call_anthropic(messages, actual_model)
         return llm_api.call_llm(messages, actual_model,
                                 params={"temperature": temperature})
     return llm_api.call_by_name(model, messages)
