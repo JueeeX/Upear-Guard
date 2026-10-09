@@ -1,0 +1,56 @@
+.sh-operations-page { height: 100%; overflow: auto; padding: 20px; background: #f7f9fc; }
+.sh-operations-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.sh-operations-metrics { display: grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.sh-operations-health { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-bottom: 12px; }
+.sh-operations-evidence { display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 12px; }
+.sh-operations-filters { margin-bottom: 12px; }
+.sh-operations-filters .ant-input { width: 220px; }
+.sh-operations-filters .ant-select { min-width: 220px; max-width: 100%; }
+.sh-operations-timeline-item { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 1100px) { .sh-operations-metrics { grid-template-columns: repeat(3, minmax(120px, 1fr)); } .sh-operations-evidence { grid-template-columns: repeat(2, minmax(180px, 1fr)); } }
+@media (max-width: 680px) { .sh-operations-page { padding: 12px; } .sh-operations-metrics, .sh-operations-health, .sh-operations-evidence { grid-template-columns: 1fr; } .sh-operations-toolbar { align-items: flex-start; flex-direction: column; } .sh-operations-filters .ant-input { width: 160px; } }
+.jx-safeharnessToggle { display: inline-flex; align-items: center; gap: 7px; padding: 0 8px; color: #344054; white-space: nowrap; }
+.jx-securityContext { overflow: auto; padding: 20px; background: #f8faff; }
+.jx-securityContext-header { display: flex; gap: 12px; align-items: center; padding-bottom: 16px; border-bottom: 1px solid #e5eaf3; color: #2459c4; }
+.jx-securityContext-header > span { font-size: 24px; }
+.jx-securityContext-header > div:first-of-type { display: grid; gap: 3px; min-width: 0; }
+.jx-securityContext-header > div:first-of-type span, .jx-securityContext-empty { color: #667085; font-size: 12px; }
+.jx-securityContext-header .ant-btn { flex: none; margin-left: auto; }
+.jx-securityContext section { margin-top: 18px; }
+.jx-securityContext h3 { margin: 0 0 10px; font-size: 14px; }
+.jx-securityContext-card { margin-bottom: 10px; padding: 12px; border: 1px solid #dfe6f2; border-radius: 10px; background: #fff; }
+.jx-securityContext-card header { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+.jx-securityContext-card header.safe { color: #087443; }
+.jx-securityContext-card header.danger, .jx-securityContext-status.warning { color: #b42318; }
+.jx-securityContext-card header.warning { color: #b54708; }
+.jx-securityContext-card p { margin: 8px 0; color: #475467; font-size: 12px; }
+.jx-securityContext-reason { line-height: 1.55; }
+.jx-securityContext-stats { display: flex; flex-wrap: wrap; gap: 6px 10px; color: #344054; font-size: 11px; line-height: 1.5; }
+.jx-securityContext-meta { margin-top: 8px; color: #667085; font-size: 11px; word-break: break-word; }
+.jx-securityContext-tools { display: grid; gap: 4px; margin-top: 9px; color: #475467; font-size: 11px; }
+.jx-securityContext-tools b { color: #344054; }
+.jx-securityContext-event { display: grid; gap: 3px; margin-top: 8px; color: #667085; font-size: 11px; word-break: break-word; }
+.jx-securityContext-event b { color: #344054; }
+.jx-securityContext-trace { margin-top: 10px; color: #344054; font-size: 11px; }
+.jx-securityContext-trace summary { cursor: pointer; font-weight: 600; }
+.jx-securityContext-trace pre { margin: 8px 0 0; padding: 9px; overflow-x: auto; border: 1px solid #e5eaf3; border-radius: 6px; background: #f8fafc; color: #344054; font: 11px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; }
+.jx-securityContext-status { display: flex; align-items: center; gap: 7px; padding: 10px; border-radius: 8px; background: #fff4ed; }
+.jx-invocationSummary {
+  margin-top: 8px;
+  color: var(--ant-color-text-secondary, #64748b);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.jx-securityMonitorStatus {
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.jx-securityMonitorStatus.is-blocked,
+.jx-securityMonitorStatus.is-error {
+  border-color: #fecaca;
+  color: #b91c1c;
+  background: #fef2f2;
+}

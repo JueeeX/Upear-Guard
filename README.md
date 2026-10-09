@@ -1,256 +1,256 @@
-# SafeHarness
+# Upear · SafeHarness
+
+> 面向 LLM 智能体的**生命周期安全框架**与**多智能体规划平台**。
+> 安全机制原生嵌入智能体执行生命周期：输入防线、能力授权、强制回执、工具网关、审计脱敏、运行监督与人工复核，配合「LLM 提案 + 确定性编译 + 人工确认」的 FSM 多智能体规划。
 
 [![arXiv](https://img.shields.io/badge/arXiv-2604.13630-b31b1b.svg)](https://arxiv.org/abs/2604.13630)
+![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![Status](https://img.shields.io/badge/Status-Engineering%20Alpha-orange)
 
 **SafeHarness: Lifecycle-Integrated Security Architecture for LLM-based Agent Deployment**
-
-Xixun Lin\*, Yang Liu\*, Yancheng Chen\*, Yongxuan Wu, Yucheng Ning, Yilong Liu, Nan Sun, Shun Zhang, Bin Chong, Chuan Zhou, Yanan Cao, Li Guo
-
-(\* Equal contribution)
-
-> SafeHarness is a unified security architecture that natively embeds safety mechanisms into the execution lifecycle of LLM-based agent harnesses. It implements a four-layer defense model — Inform, Verify, Constrain, Correct — with cross-layer feedback and memory protection, achieving lifecycle-aligned security across diverse agent execution paradigms (ReAct, Multi-Agent, Map-Reduce, MemSkill, etc.).
+Xixun Lin\*, Yang Liu\*, Yancheng Chen\*, Yongxuan Wu, Yucheng Ning, Yilong Liu, Nan Sun, Shun Zhang, Bin Chong, Chuan Zhou, Yanan Cao, Li Guo (\* Equal contribution)
 
 ---
 
-本项目实现了论文中提出的 SafeHarness 框架——一个将安全机制原生嵌入 Agent Harness 执行生命周期的统一安全架构。
+## 为什么是 Upear / SafeHarness
+
+工具型智能体在**多轮推理、工具调用、环境状态与记忆读写**中完成任务，不安全行为可能出现在任何一环。把安全做成「进模型前拦一次、出模型后查一次」的外挂护栏，会漏掉工具滥用、间接注入、记忆腐蚀等关键攻击面。
+
+SafeHarness 的核心判断：**可信的智能体安全应与 Harness 执行管线同构**——安全机制作为执行路径上的一等公民，在统一抽象下接入多种执行形态（ReAct、多智能体、Map-Reduce 等），使同一类防御横向可比。
+
+本项目包含两部分：
+
+- **SafeHarness 安全框架**（`src/safeharness`，独立 pip 包）：与执行生命周期对齐的四层安全模型、能力令牌与强制回执、工具安全网关、审计与监督；
+- **Upear 平台**：基于该框架的多智能体产品化平台——受保护对话链、FSM 多智能体规划、外部智能体桥、安全运营前端（平台后端基于 [HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS) 构建，见[致谢](#-致谢)）。
 
 ---
 
-## 设计动机
+## 安全能力
 
-### 问题背景：Agent 任务与安全决策绑在执行形态上
-
-面向工具的 Agent 往往在**多轮推理、工具调用、环境状态与记忆读写**中完成任务；同一类「不安全行为」可能出现在用户指令、检索内容、工具返回值、跨步推理或持久状态中。若把安全看成「进模型前拦一次、出模型后查一次」，会默认攻击面主要落在自然语言接口两端——这与真实 Agent 的**长链路、可观测中间态**并不一致。
-
-### 外挂式（bolt-on）方案为何不够
-
-业界常见做法是在模型调用前后叠加独立模块（输入过滤、输出审核、外挂护栏等）。这类设计在本项目所针对的场景下存在三类结构性不足：
-
-1. **与执行范式脱钩**：不同 Harness（如 Direct、ReAct、Multi-Agent、Map-Reduce、MemSkill 等）在**推理轨迹、角色分工、子任务并行与记忆构建**上的行为差异很大；安全模块若停留在「黑盒外侧」，难以稳定获得与决策相关的**中间表征**（例如逐步 Observation、分解结果、记忆条目），容易产生误判或漏判。
-2. **防御割裂、难以联动**：输入侧、推理侧、工具侧、状态侧若各自为政，缺少统一信号（如注入迹象、风险分数、降级等级）在层间传递，就无法形成**可解释的纵深防御**，也不利于在攻击升级时自动收紧策略。
-3. **关键环节覆盖不足**：高风险动作往往发生在**工具执行与状态更新**（权限边界、工具完整性、可回滚性）；仅覆盖「进/出两端」会低估工具滥用、描述篡改、记忆/环境腐蚀等向量——这与本仓库威胁模型（T1–T6）及 Agent-SafetyBench 类评测所强调的风险并不对齐。
-
-### SafeHarness 的立场
-
-本项目的核心判断是：**可信的 Agent 安全应尽量与 Harness 执行管线同构**——把安全机制作为执行路径上的**一等公民**，在统一抽象下接入多种 Harness，使「同一类防御」可在不同执行形态间**横向可比**。
-
-具体而言：
-
-- **生命周期对齐**：将安全职责映射到「输入处理 → 决策推理 → 动作执行 → 状态更新」四段，并辅以跨步记忆保护与熵监控，避免遗漏持久状态与跨步攻击面。
-- **层间反馈而非堆叠**：各层可基于上游信号升级验证、触发回滚与权限收紧，并在风险降低后自适应恢复，平衡安全与效用。
-- **可检验**：通过禁用单层或记忆组件的消融配置，验证「缺哪一层、伤哪类指标」，使动机不仅停留在设计主张，也与实验结论闭环。
-
----
-
-## 核心架构：四层安全生命周期模型
-
-### 为什么恰好是四层？
-
-SafeHarness 的四层设计覆盖 Agent 执行生命周期的四个不可缺少的阶段。每一层守护一个特定阶段，确保覆盖完整且不冗余：
+### 四层安全生命周期模型
 
 ```
-Agent 执行生命周期                    SafeHarness 安全层（论文定义顺序）
-                                     
-┌──────────────────┐                ┌─────────────────────────────────────────┐
-│ 1. 信息输入       │ ◄─── 守护 ──── │ L1: INFORM — 对抗性上下文过滤              │
-│ (Input Processing)│                │ → 结构净化 · 模式检测 · 语义过滤 · 溯源标记  │
-├──────────────────┤                ├─────────────────────────────────────────┤
-│ 2. 决策推理       │ ◄─── 守护 ──── │ L2: VERIFY — 因果安全验证                  │
-│ (Decision Making) │                │ → Tier1 规则 · Tier2 LLM护栏 · Tier3 因果 │
-├──────────────────┤                ├─────────────────────────────────────────┤
-│ 3. 动作执行       │ ◄─── 守护 ──── │ L3: CONSTRAIN — 特权分离工具控制            │
-│ (Action Execution)│                │ → 风险分级 · 能力令牌 · HMAC 签名验证        │
-├──────────────────┤                ├─────────────────────────────────────────┤
-│ 4. 状态更新       │ ◄─── 守护 ──── │ L4: CORRECT — 安全回滚与恢复               │
-│ (State Update)    │                │ → 检查点 · 因果回滚 · 自适应降级/恢复         │
-└──────────────────┘                └─────────────────────────────────────────┘
-                                     
-         跨越所有阶段 ◄─── 守护 ──── 跨层：记忆保护 & 熵监控
-                                     → 溯源标记 · 异常检测 · 熵漂移触发
+智能体执行生命周期                SafeHarness 安全层
+┌──────────────────┐           ┌─────────────────────────────────────────┐
+│ 1. 信息输入       │ ◄─ 守护 ─ │ L1 INFORM — 对抗性上下文过滤              │
+│ (Input)          │           │   结构净化 · 模式检测 · 语义过滤 · 溯源标记 │
+├──────────────────┤           ├─────────────────────────────────────────┤
+│ 2. 决策推理       │ ◄─ 守护 ─ │ L2 VERIFY — 分级安全验证                  │
+│ (Decision)       │           │   规则 → LLM 护栏 → 因果诊断              │
+├──────────────────┤           ├─────────────────────────────────────────┤
+│ 3. 动作执行       │ ◄─ 守护 ─ │ L3 CONSTRAIN — 特权分离工具控制           │
+│ (Action)         │           │   风险分级 · 能力令牌 · HMAC 签名验证     │
+├──────────────────┤           ├─────────────────────────────────────────┤
+│ 4. 状态更新       │ ◄─ 守护 ─ │ L4 CORRECT — 安全回滚与恢复               │
+│ (State)          │           │   检查点 · 因果回滚 · 自适应降级/恢复      │
+└──────────────────┘           └─────────────────────────────────────────┘
+        跨越所有阶段 ◄─ 守护 ─ 跨层：记忆保护 & 熵监控
 ```
 
-### 运行时执行路径（Algorithm 1）
-
-论文 Algorithm 1 给出了 SafeHarness 每步的实际执行顺序。它与四层的生命周期映射的关系为：**L1 在输入/观测入口过滤，L3 和 L2 在工具调用边界依次检查（L3 先、L2 后），L4 负责全程快照与事后恢复**：
-
-```mermaid
-flowchart TD
-    subgraph ctxPath ["上下文路径（filter_context，L1 Inform）"]
-        direction LR
-        IN1["用户指令 / 数据集对话<br/>/ fake_history"] --> L1in["L1 过滤"]
-        OBS["工具 observation<br/>/ 子任务结果"] --> L1obs["L1 过滤"]
-    end
-
-    L1in --> Model["LLM 推理"]
-    L1obs --> Model
-    Model --> Parse["解析工具调用<br/>tool + arguments"]
-
-    subgraph actionPath ["工具调用路径（check_action）"]
-        direction TB
-        PA1["L4 maybe_checkpoint<br/>（打快照）"] --> PA2["L3 权限/签名/令牌检查"]
-        PA2 -->|"拒绝"| Block["拦截，返回 blocked"]
-        PA2 -->|"通过"| PA3["L2 分级语义验证<br/>Tier1→2→3"]
-        PA3 -->|"SAFE"| PA4["记忆写入 + 熵检测"]
-        PA3 -->|"UNSAFE（Tier3 确认攻击）"| PA5["L4 rollback + escalate_degradation<br/>+ memory restore"]
-        PA3 -->|"UNSAFE（Tier2）"| PA6["L4 escalate_degradation"]
-        PA4 --> PA7["L4 maybe_recover<br/>（联动 L2 maybe_deescalate）"]
-    end
-
-    Parse --> PA1
-    PA7 --> ExecTool["执行工具"]
-    ExecTool --> OBS
-```
-
-
-
-L1 检测到注入（`injection_detected`）时，会通过熵监控器记录违规；若累计熵漂移超过阈值，立即调用 `l2.escalate_verification()` 抬高 L2 最低验证等级；此外在下一次 `check_action` 时，`_last_untrusted` 标志还会触发 `l2.set_min_tier(2)`，确保 L1 信号跨步骤传递给 L2（L1→L2 层间反馈）。
-
-### 四层必要性论证
-
-
-| 执行阶段     | 安全层          | 安全属性                    | 为什么必要                                                            |
-| -------- | ------------ | ----------------------- | ---------------------------------------------------------------- |
-| **信息输入** | L1 INFORM    | 输入完整性 (Input Integrity) | 若无此层，被投毒的上下文（提示注入、RAG 污染）直接进入 Agent，后续所有层的决策基础都被破坏               |
-| **决策推理** | L2 VERIFY    | 行为安全性 (Action Safety)   | 即使输入干净，Agent 自身也可能做出不安全决策（实验表明 clean 场景也有 22-56% unsafe 率），需独立验证 |
-| **动作执行** | L3 CONSTRAIN | 最小权限 (Least Privilege)  | 即使决策被验证通过，仍需强制执行权限边界——L2 可能被绕过或误判，L3 提供硬性保障                      |
-| **状态更新** | L4 CORRECT   | 可恢复性 (Recoverability)   | 前三层均有失败可能，最后一道防线保证可回滚到安全状态，并通过自适应降级/恢复平衡安全与效用                    |
-
-
-**充分性论证**：两条路径（上下文路径 L1、工具调用路径 L3+L2+L4）覆盖了 Agent 执行生命周期中所有可被攻击的环节。跨层记忆保护针对持久状态（不属于任何单一阶段的循环），确保状态不被跨步骤污染。
-
-**必要性验证**：消融实验（Ablation Study）通过逐一禁用各层来量化每一层的独立贡献，证明移除任何一层都会导致特定指标显著恶化。
+层间不是简单堆叠，而是主动反馈：L1 检出注入会抬高 L2 验证等级；L2 确认攻击触发 L4 回滚与降级；L4 降级同步收紧 L3 权限；连续安全后自适应恢复。
 
 ### 威胁模型
 
+| 威胁向量 | 描述 | 主要防御层 |
+|---|---|---|
+| T1 直接提示注入 | 用户输入中包含对抗性指令 | L1（模式过滤+语义净化） |
+| T2 间接提示注入 | 工具返回值 / RAG 内容中嵌入恶意指令 | L1（observation 过滤） |
+| T3 工具滥用 | 智能体被诱导调用高风险工具 | L3（权限分级） |
+| T4 工具描述篡改 | 攻击者修改工具描述改变智能体行为 | L3（HMAC 签名验证） |
+| T5 状态/记忆腐蚀 | 注入虚假历史或修改持久状态 | 跨层记忆保护 |
+| T6 权限提升 | 智能体尝试执行超授权操作 | L3（能力令牌+分级） |
 
-| 威胁向量        | 描述                    | 主要防御层               | 辅助防御层           |
-| ----------- | --------------------- | ------------------- | --------------- |
-| T1: 直接提示注入  | 用户输入/指令中包含对抗性指令       | L1 (模式过滤+语义净化)      | L2 (Tier3 因果诊断) |
-| T2: 间接提示注入  | 工具返回值/RAG 检索内容中嵌入恶意指令 | L1 (observation 过滤) | L2 (因果诊断)       |
-| T3: 工具滥用    | Agent 被诱导调用高风险工具      | L3 (权限分级)           | L2 (规则+LLM 验证)  |
-| T4: 工具描述篡改  | 攻击者修改工具描述以改变 Agent 行为 | L3 (HMAC 签名验证)      | L1 (异常检测)       |
-| T5: 状态/记忆腐蚀 | 攻击者注入虚假对话历史或修改持久状态    | 跨层记忆保护 (溯源+异常)      | L4 (回滚)         |
-| T6: 权限提升    | Agent 尝试执行超出授权范围的操作   | L3 (能力令牌+分级)        | L4 (降级)         |
+### 平台安全机制
 
+- **受保护对话链**：结构防线（正则注入检测 + SQL 形状分类器，毫秒级、零模型调用）→ 语义 Judge（fail-closed，不确定即拦截）→ 分流执行，全程审计落账。
+- **Tool Security Gateway**：集中式工具授权网关——capability 签发/验证/原子消费（防重放）、强制回执（agent 侧签名、网关同钥验证）、网关侧独立审计账本。工具执行产生 `capability_issue → capability_inspect → dispatched → succeeded/denied` 四行完整审计闭环。
+- **强制回执（Enforcement Receipt）**：本地 runtime 决策 allow 后对 invocation countersign，网关验证签名后才执行；token 永不落入智能体侧审计。
+- **审计链与脱敏**：SQLite WAL 审计（16KB 截断、90 天/20 万行轮转），可选脱敏模式——正文键做摘要化（redacted+sha256），敏感键（api_key/token/secret 等）替换为 `[REDACTED]`，攻击原文不落账。
+- **运行监督**：步数超限 / 循环检测 / 输出超长 / 预算超支四类触发 → 语义复核（fail-closed）→ 结构化拦截 → 进入人工复核队列，复核结案留痕。
+- **通信网关**：租户/智能体身份强制、默认拒绝通信拓扑、有界委托、注水式消息检查、限速与租约投递。
 
-### 层间反馈机制
+### 内部红队基线（参考）
 
-SafeHarness 不是简单的安全层堆叠，各层之间存在主动反馈（均在 `SecurityPipeline` 中实现，与论文 Figure 1 caption 一致）：
+> 以下为内部 red-team 回归的初步结果，仅说明测试方法有效性与当前防线的相对水位，**不构成任何生产环境安全承诺**。攻击效果判定均经人工复核；裸模型基线受采样方差影响，报区间不报单点。
 
-- **L1 → L2 升级**：`filter_context` 中，若 L1 检测到注入（`injection_detected=True`），熵监控器记录一次违规并将 `_last_untrusted` 置位；若此时熵漂移已超阈值，立即调用 `l2.escalate_verification()` 将 L2 最低验证等级抬高到 Tier 2。在下一次 `check_action` 中，`_last_untrusted` 会进一步触发 `l2.set_min_tier(2)`，确保 L1 的检测信号跨步骤生效。
-- **L2 确认攻击 → L4 回滚+降级**：当 L2 Tier 3 因果诊断判定为 `is_attack=True` 时，`check_action` 立即调用 `l4.rollback()` 恢复最近安全检查点（含 ProtectedMemory 快照）并调用 `l4.escalate_degradation()`；当 L2 Tier 2 判为 UNSAFE（较低置信度）时，同样触发 `escalate_degradation()`，但不回滚。
-- **L4 降级 → L3 权限收紧**：每次 `check_action` 开始时，`l3.max_allowed_tier` 被同步为 `l4.max_allowed_tier()`。L4 的降级等级（0=正常 → 4=只读）与 L3 的五级风险体系一一对齐（destructive → network → execute → write → read_only）；实际可达的最高降级等级受 `config.layer4.max_degradation_level` 配置上限约束。
-- **L4 自适应恢复 → L2 降级验证**：连续安全操作达到 `recovery_window` 阈值后，`l4.maybe_recover()` 降低一级降级等级，同时调用 `l2.maybe_deescalate()` 将 L2 最低验证等级重置为 Tier 1，平衡安全与效用。
+| 测试集 | 受保护链路 | 裸模型参照 |
+|---|---|---|
+| 本地注入基线（30 条） | **30/30 防住，ASR 0%** | — |
+| 公开攻击套件（104 条） | triage 后 **1.0%** | glm-4 系列 18–26% |
+| 外部智能体桥（104×3 框架） | autogen 1.0% / openai-agents 3.9% / smolagents 1.0% | 同上 |
+
+---
+
+## 多智能体规划能力
+
+### FSM 多智能体规划：LLM 提案 + 确定性编译
+
+规划权在 LLM，执行权在代码：
+
+1. 用户任务经 SafeHarness 输入检查（逐条语义验证）；
+2. **LLM 只提案**——选择能力与顺序；
+3. `fsm_builder` **纯代码确定性编译**：依赖扩展、输入绑定、failure 路径、高危动作强制人工审批；
+4. `validate_fsm` 校验 + `plan_hash`/`registry_hash` 锁定计划与能力注册表；
+5. PlanCard 预览 → **人工确认** → SSE 流式执行，全程可追踪、可审计。
+
+监督者是代码不是模型：计划一旦确认，执行路径不再由模型自由发挥。
+
+### 多智能体调度
+
+- `platform-supervisor`（纯规则调度身份，零 LLM 调用）按消息分类分流：运维诊断 / 知识问答 / 联网搜索 / 通用对话（`main_agent`）；
+- 子智能体委派、@ 提及单轮委派、`/` 斜杠命令四段选择（智能体/插件/技能/MCP 工具）。
+
+### 外部智能体桥
+
+统一接入三个主流框架的智能体，**零新增凭据**（统一走平台模型链）：
+
+| 框架 | 形态 |
+|---|---|
+| AutoGen（Microsoft） | AssistantAgent |
+| OpenAI Agents SDK | ReAct Agent |
+| smolagents（HuggingFace） | CodeAgent |
+
+每个外部智能体均获得与主链一致的：输入守卫（注入检测 fail-closed）、网关工具（全证明链：本地回执签名 → capability 签发 → 双证明执行）、记忆配置（窗口截取 + mem0 长期记忆读写）、运行监督（四触发 + 语义复核）。运行回执带 `evidence`：步数、记忆状态机、工具调用链 `receipt=verified` 徽章、监督干预警告。
 
 ---
 
-## 项目结构
+## 仓库结构
 
 ```
-SafeHarness/
-├── config/
-│   └── experiment.yaml          # 全局配置（模型、阈值、攻击类型、消融配置等）
-├── data/                        # 自动下载的数据集（Agent-SafetyBench）
-├── output/                      # 实验结果输出
-├── src/
-│   ├── llm_client.py            # LLM 调用封装
-│   ├── data_loader.py           # 数据集下载与加载
-│   ├── tools/
-│   │   ├── registry.py          # 工具注册、HMAC 签名、风险分级、能力令牌
-│   │   └── simulated_tools.py   # 模拟工具执行环境
-│   ├── harness/
-│   │   ├── base.py              # 抽象基类 & HarnessResult；初始消息构建与工具调用入口（filter_context/check_action 在此被调用）
-│   │   ├── direct.py            # Direct API（单次 LLM 调用；工具输出经 L1 filter_context 过滤）
-│   │   ├── react.py             # ReAct 推理循环（observation 经 L1 过滤；每步调用 l2.record_reasoning）
-│   │   ├── multi_agent.py       # Multi-Agent + Critic（工具输出经 L1 过滤；L2 不记录多步推理历史）
-│   │   ├── map_reduce.py        # Map-Reduce 任务委托（子结果经 L1 过滤；L2 不记录多步推理历史）
-│   │   └── memskill.py          # MemSkill 技能条件化记忆构建 + 记忆增强 ReAct（同 ReAct，调用 l2.record_reasoning）
-│   ├── safety/
-│   │   ├── __init__.py          # SecurityPipeline / LlamaFirewallPipeline /
-│   │   │                        # SystemPromptDefense / GuardrailPipeline
-│   │   ├── layer1_inform.py     # L1 Inform: 对抗性上下文过滤（结构净化·模式检测·语义过滤·溯源）
-│   │   ├── layer2_verify.py     # L2 Verify: 三级因果安全验证（Tier1 规则·Tier2 LLM·Tier3 因果）
-│   │   ├── layer3_constrain.py  # L3 Constrain: 特权分离工具控制（风险分级·令牌·HMAC）
-│   │   ├── layer4_correct.py    # L4 Correct: 安全回滚 + 自适应降级/恢复
-│   │   └── memory_protection.py # 跨层记忆保护 & 熵监控
-│   ├── attacks/
-│   │   ├── context_poisoning.py   # A1: 上下文投毒（8 种 payload 变体）
-│   │   ├── indirect_injection.py  # A2: 间接注入（通过工具返回值）
-│   │   ├── tool_tampering.py      # A3: 工具描述篡改 + 参数提升
-│   │   ├── memory_injection.py    # A4: 虚假历史注入
-│   │   └── composite_attack.py    # A5: 组合攻击（多向量同时）
-│   └── evaluation/
-│       ├── rule_checker.py      # 规则安全检查器
-│       ├── llm_judge.py         # LLM-as-Judge 评估器
-│       ├── metrics.py           # UBR/ASR/TCR/UA/NNH 指标
-│       └── statistics.py        # Bootstrap CI / 显著性检验
-├── run_demo.py                  # 快速 Demo
-├── run_experiment.py            # 完整实验入口（含消融/Bootstrap）
-├── visualize.py                 # 结果可视化
-├── results.py                   # 从已保存 JSON/JSONL 离线重算指标
-├── test_e2e.py                  # 端到端冒烟（默认可 mock LLM）
-├── llm_api.py                   # LLM API 底层调用
-├── requirements.txt
-└── README.md
+Upear/
+├── src/safeharness/            # SafeHarness 安全框架本体（独立 pip 包）
+│   ├── policies/               #   输入防线：inform(正则+语义) / sql_guard / constrain(能力门)
+│   ├── runtime/                #   会话决策 / 回执 / 审批生命周期 / 审计脱敏
+│   ├── backends/               #   SignedCapabilityGateway / 回执 / replay / SQLite 审计
+│   ├── gateway/                #   网关客户端与服务端（HTTP）
+│   ├── evolution/              #   物化内容闸门 + 语义复查
+│   └── adapters/               #   LangGraph 受保护聊天适配器
+├── src/harness|safety|attacks|evaluation/   # 论文复现代码（四层实现 / 攻击套件 / 评测指标）
+├── Upear UI/                   # 平台前端（React + Vite + TypeScript）
+├── examples/
+│   ├── langgraph_noc/          #   LangGraph NOC 安全运维 Demo（守卫节点 + 签名能力）
+│   └── product_demo/           #   一键五进程产品 Demo（见下）
+├── tools/agentprobe/           # 注入攻击扫描套件、结果汇总与 triage 工具
+├── deploy/                     # 生产化部署拓扑（PostgreSQL/Redis/Grafana/备份）
+├── tests/                      # 框架测试（核心 / 回执 / SQL 守卫 / 受保护桥接）
+├── docs/                       # 架构与运维文档（威胁模型 / 网关 / 通信网关 / LLM 配置）
+├── config/                     # 实验配置与组件 env 模板
+├── run_experiment.py           # 论文实验入口（含消融 / Bootstrap）
+├── run_demo.py                 # 论文快速 Demo
+└── pyproject.toml              # safeharness 包定义（safeharness-audit 等 CLI）
 ```
 
----
+平台后端（受保护对话、FSM 规划编译器、外部智能体桥、审计与复核服务）基于 [HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS) 构建，单独仓库托管。
 
 ## 快速开始
 
-### 1. 安装依赖
+### 1. 框架安装
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt   # 或: pip install -e .
 ```
 
-### 2. 配置 API Key
+模型配置：复制 `config/llm.env.example` 为 `config/llm.env`，填入任意 OpenAI 兼容端点：
 
-复制 `.env.example` 为 `.env`，填入对应的 API Key：
-
-```bash
-cp .env.example .env
-# 编辑 .env 填入 OPENAI_API_KEY / ANTHROPIC_API_KEY / DEEPSEEK_API_KEY
+```dotenv
+SAFEHARNESS_LLM_BASE_URL=https://your-provider.example/v1
+SAFEHARNESS_LLM_API_KEY=your-api-key
+SAFEHARNESS_LLM_MODEL=your-model-id
+SAFEHARNESS_JUDGE_MODEL=your-judge-model-id   # 可选：独立语义 Judge 模型
 ```
 
-或直接设置环境变量：
+### 2. 框架最小用例
 
-```bash
-export OPENAI_API_KEY="sk-..."
-export ANTHROPIC_API_KEY="sk-ant-..."
-export DEEPSEEK_API_KEY="sk-..."
+```python
+from safeharness import Guard, LangGraphAgent, LangGraphTool
+
+def lookup_alarm(alarm_id: str) -> dict:
+    """Look up one alarm."""
+    return {"alarm_id": alarm_id, "status": "active"}
+
+tool = LangGraphTool.from_callable(
+    lookup_alarm,
+    required_capabilities={"alarm:read"},
+    resource_parameter="alarm_id",
+)
+
+async with Guard(tenant_id="local", agent_id="assistant") as guard:
+    graph = guard.attach(LangGraphAgent(model=model, tools=(tool,)))
+    result = await graph.ainvoke({"messages": messages})
 ```
 
-### 3. 运行 Demo
+`Guard.attach()` 默认生产安全契约：仅接受覆盖全部生命周期边界的 Adapter，未知智能体**拒绝接入而非静默降级**。
+
+### 3. 论文复现实验
 
 ```bash
-python run_demo.py
+python run_demo.py                                 # 快速 Demo
+python run_experiment.py --subset 200              # 完整实验
+python run_experiment.py --ablation                # 消融实验
+python run_experiment.py --subset 100 --bootstrap  # Bootstrap 置信区间
 ```
 
-### 4. 运行完整实验
+### 4. 产品 Demo（五进程）
 
-```bash
-# 200 条数据，按当前 config 矩阵运行
-python run_experiment.py --subset 200
+完整平台体验需要同时获取平台后端（Upear-Backend，基于 HugAgentOS 构建）与前端（本仓库 `Upear UI/`）。五进程拓扑：
 
-# 消融实验
-python run_experiment.py --ablation
+| 端口 | 进程 |
+|---|---|
+| 3001 | 平台后端 BFF（uvicorn） |
+| 3002 | 前端（Vite） |
+| 38200 | 智能体通信网关 |
+| 38308 | SafeHarness Admin UI |
+| 38310 | Tool Security Gateway |
 
-# 带 Bootstrap 置信区间
-python run_experiment.py --subset 100 --bootstrap
+```powershell
+powershell -ExecutionPolicy Bypass -File examples\product_demo\run.ps1
 ```
 
-### 5. 自定义运行
+登录 `admin / admin123`（本地演示账号）。启动器不读取仓库真实 `.env`，后端从隔离临时目录启动；Demo 攻击场景使用真实 SafeHarness runtime。详细说明见 [examples/product_demo/README.md](examples/product_demo/README.md)。
+
+## 文档
+
+- [威胁模型](docs/threat-model.md)
+- [框架工程说明](docs/engineering.md)
+- [Tool Security Gateway](docs/tool-security-gateway.md)
+- [Agent Communication Gateway](docs/agent-communication-gateway.md)
+- [LLM 配置](docs/llm-configuration.md)
+- [Admin Console](docs/admin-console.md)
+- [提示注入演示指南](docs/prompt-injection-demo-guide.md)
+- [后端测试手册](docs/backend-test-manual.md) / [前端测试手册](docs/frontend-test-manual.md)
+
+## 测试
 
 ```bash
-# 只跑 direct + react，只比较 unprotected 和 safe_harness
-python run_demo.py --harness direct react --security unprotected safe_harness
+# 框架全套
+python -m pytest --noconftest -q tests/test_core.py tests/test_legacy.py tests/test_sql_guard.py \
+  tests/test_plan_judge_contract.py tests/test_protected_chat_bridge.py \
+  tests/test_enforcement_receipts.py tests/test_receipt_configuration.py
 
-# 完整实验，16 线程
-python run_experiment.py --subset 200 --workers 16
+# 论文代码端到端冒烟（可 mock LLM）
+python test_e2e.py
 ```
 
 ---
+
+## 🙏 致谢
+
+本项目站在众多开源项目的肩膀上构建，感谢以下项目与社区的贡献：
+
+| 项目 | 本项目中的用途 |
+|---|---|
+| [HugAgentOS (ZJU-REAL)](https://github.com/ZJU-REAL/HugAgentOS) | 平台后端的基座：多智能体对话、会话与编排基础设施。SafeHarness 平台侧能力（受保护对话链、外部智能体桥、审计复核等）在其上扩展构建 |
+| [LangGraph](https://github.com/langchain-ai/langgraph) | 智能体执行框架与受保护图适配（`safeharness/adapters`、`examples/langgraph_noc`） |
+| [mem0](https://github.com/mem0ai/mem0) | 外部智能体长期记忆读写 |
+| [AutoGen](https://github.com/microsoft/autogen) / [OpenAI Agents SDK](https://github.com/openai/openai-agents-python) / [smolagents](https://github.com/huggingface/smolagents) | 外部智能体桥接的三种执行框架 |
+| [AgentProbe](https://www.npmjs.com/package/@alexmelges/agentprobe) | 提示注入攻击套件与红队扫描方法（`tools/agentprobe`） |
+| [Agent-SafetyBench](https://github.com/thu-coai/Agent-SafetyBench) | 论文实验评测数据集 |
+| [LlamaFirewall](https://github.com/meta-llama/PurpleLlama) | 论文中的基线防御对比 |
+| [AgentScope](https://github.com/modelscope/agentscope) | 产品 Demo 运行时依赖 |
+| [FastAPI](https://github.com/fastapi/fastapi) / [React](https://github.com/facebook/react) / [Vite](https://github.com/vitejs/vite) | 前后端工程基础设施 |
+
+上述项目均以其自身许可证发布，使用本仓库时请同时遵循各上游项目的许可证条款。
 
 ## 引用
 
@@ -267,3 +267,6 @@ python run_experiment.py --subset 200 --workers 16
 }
 ```
 
+## 许可证
+
+[Apache-2.0](LICENSE)

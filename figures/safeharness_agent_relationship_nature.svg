@@ -1,0 +1,621 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="527.458638pt" height="387.36pt" viewBox="0 0 527.458638 387.36" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-07-15T10:22:28.532698</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.10.9, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 387.36 
+L 527.458638 387.36 
+L 527.458638 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 21.024 161.244 
+L 503.136 161.244 
+L 503.136 86.832 
+L 21.024 86.832 
+z
+" clip-path="url(#p8fba227578)" style="fill: #f8fafc"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 72.864 243.288 
+L 484.992 243.288 
+L 484.992 187.956 
+L 72.864 187.956 
+z
+" clip-path="url(#p8fba227578)" style="fill: #fbfafd; stroke: #dce1e5; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 101.376 146.111227 
+Q 101.376 166.014 101.376 185.916773 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #bfc6cc; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 100.176 148.511227 
+L 101.376 146.111227 
+L 102.576 148.511227 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #bfc6cc; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 102.576 183.516773 
+L 101.376 185.916773 
+L 100.176 183.516773 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #bfc6cc; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 221.6448 146.111227 
+Q 221.6448 166.014 221.6448 185.916773 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #bfc6cc; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 220.4448 148.511227 
+L 221.6448 146.111227 
+L 222.8448 148.511227 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #bfc6cc; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 222.8448 183.516773 
+L 221.6448 185.916773 
+L 220.4448 183.516773 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #bfc6cc; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 346.0608 146.111227 
+Q 346.0608 166.014 346.0608 185.916773 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #bfc6cc; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 344.8608 148.511227 
+L 346.0608 146.111227 
+L 347.2608 148.511227 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #bfc6cc; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 347.2608 183.516773 
+L 346.0608 185.916773 
+L 344.8608 183.516773 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #bfc6cc; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 462.7008 146.111227 
+Q 462.7008 166.014 462.7008 185.916773 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #bfc6cc; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 461.5008 148.511227 
+L 462.7008 146.111227 
+L 463.9008 148.511227 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #bfc6cc; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 463.9008 183.516773 
+L 462.7008 185.916773 
+L 461.5008 183.516773 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #bfc6cc; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="line2d_1">
+    <path d="M 114.336 95.2272 
+L 495.36 95.2272 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke: #dce1e5; stroke-width: 0.7; stroke-linecap: square"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 71.3088 124.992 
+Q 73.9008 124.992 75.486569 124.992 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+    <path d="M 72.286569 123.392 
+L 75.486569 124.992 
+L 72.286569 126.592 
+z
+" clip-path="url(#p8fba227578)" style="fill: #66707a; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 125.7408 124.992 
+Q 128.3328 124.992 129.918569 124.992 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+    <path d="M 126.718569 123.392 
+L 129.918569 124.992 
+L 126.718569 126.592 
+z
+" clip-path="url(#p8fba227578)" style="fill: #66707a; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 187.9488 124.992 
+Q 190.5408 124.992 192.126569 124.992 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+    <path d="M 188.926569 123.392 
+L 192.126569 124.992 
+L 188.926569 126.592 
+z
+" clip-path="url(#p8fba227578)" style="fill: #66707a; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 250.1568 124.992 
+Q 252.7488 124.992 254.334569 124.992 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+    <path d="M 251.134569 123.392 
+L 254.334569 124.992 
+L 251.134569 126.592 
+z
+" clip-path="url(#p8fba227578)" style="fill: #66707a; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 312.3648 124.992 
+Q 314.9568 124.992 316.542569 124.992 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+    <path d="M 313.342569 123.392 
+L 316.542569 124.992 
+L 313.342569 126.592 
+z
+" clip-path="url(#p8fba227578)" style="fill: #66707a; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 374.5728 124.992 
+Q 377.1648 124.992 378.750569 124.992 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+    <path d="M 375.550569 123.392 
+L 378.750569 124.992 
+L 375.550569 126.592 
+z
+" clip-path="url(#p8fba227578)" style="fill: #66707a; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 431.5968 124.992 
+Q 434.1888 124.992 435.774569 124.992 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+    <path d="M 432.574569 123.392 
+L 435.774569 124.992 
+L 432.574569 126.592 
+z
+" clip-path="url(#p8fba227578)" style="fill: #66707a; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+   </g>
+   <g id="patch_15">
+    <path d="M 488.6208 124.992 
+Q 496.656 124.992 503.684969 124.992 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+    <path d="M 500.484969 123.392 
+L 503.684969 124.992 
+L 500.484969 126.592 
+z
+" clip-path="url(#p8fba227578)" style="fill: #66707a; stroke: #66707a; stroke-width: 0.9; stroke-linecap: round"/>
+   </g>
+   <g id="line2d_2">
+    <path d="M 308.736 213.5232 
+L 316.512 213.5232 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke: #2e9e44; stroke-width: 2; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_3">
+    <path d="M 347.0976 213.5232 
+L 354.8736 213.5232 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke: #d99b2b; stroke-width: 2; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_4">
+    <path d="M 385.4592 213.5232 
+L 393.2352 213.5232 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke: #b64342; stroke-width: 2; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_5">
+    <path d="M 423.8208 213.5232 
+L 431.5968 213.5232 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke: #7c6ccf; stroke-width: 2; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_6">
+    <path d="M 316.512 359.676 
+L 316.512 260.46 
+" clip-path="url(#p8fba227578)" style="fill: none; stroke: #dce1e5; stroke-width: 0.8; stroke-linecap: square"/>
+   </g>
+   <g id="patch_16">
+    <path d="M 329.472 311.976 
+L 333.6192 311.976 
+L 333.6192 264.276 
+L 329.472 264.276 
+z
+" clip-path="url(#p8fba227578)" style="fill: #0f4d92"/>
+   </g>
+   <g id="patch_17">
+    <path d="M 422.784 311.976 
+L 426.9312 311.976 
+L 426.9312 264.276 
+L 422.784 264.276 
+z
+" clip-path="url(#p8fba227578)" style="fill: #7c6ccf"/>
+   </g>
+   <g id="patch_18">
+    <path d="M 330.5088 361.2024 
+L 502.0992 361.2024 
+Q 506.2464 361.2024 506.2464 358.1496 
+L 506.2464 331.056 
+Q 506.2464 328.0032 502.0992 328.0032 
+L 330.5088 328.0032 
+Q 326.3616 328.0032 326.3616 331.056 
+L 326.3616 358.1496 
+Q 326.3616 361.2024 330.5088 361.2024 
+z
+" clip-path="url(#p8fba227578)" style="fill: #ffffff; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #66707a; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #272727" x="21.024" y="28.081925" transform="rotate(-0 21.024 28.081925)">SafeHarness 在智能体执行过程中提供安全能力</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 6.5px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #66707a" x="21.024" y="40.893537" transform="rotate(-0 21.024 40.893537)">智能体负责理解、推理与规划；SafeHarness 在关键边界检查、授权、阻断、审计与恢复。</text>
+   </g>
+   <g id="text_3">
+    <text style="font-weight: 700; font-size: 8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start" x="15.84" y="60.8832" transform="rotate(-0 15.84 60.8832)">a</text>
+   </g>
+   <g id="text_4">
+    <text style="font-weight: 700; font-size: 7.4px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #272727" x="28.8" y="62.921091" transform="rotate(-0 28.8 62.921091)">智能体运行时安全注入路径</text>
+   </g>
+   <g id="text_5">
+    <text style="font-weight: 700; font-size: 5.6px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #272727" x="26.208" y="96.769387" transform="rotate(-0 26.208 96.769387)">从输入到响应的完整执行时序</text>
+   </g>
+   <g id="patch_19">
+    <path d="M 27.7632 145.98 
+L 68.7168 145.98 
+Q 72.864 145.98 72.864 142.9272 
+L 72.864 107.0568 
+Q 72.864 104.004 68.7168 104.004 
+L 27.7632 104.004 
+Q 23.616 104.004 23.616 107.0568 
+L 23.616 142.9272 
+Q 23.616 145.98 27.7632 145.98 
+z
+" clip-path="url(#p8fba227578)" style="fill: #e7f0f8; stroke: #0f4d92; stroke-width: 0.9; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_6">
+    <text style="font-weight: 700; font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #0f4d92" x="48.24" y="102.654675" transform="rotate(-0 48.24 102.654675)">1</text>
+   </g>
+   <g id="patch_20">
+    <path d="M 79.6032 145.98 
+L 123.1488 145.98 
+Q 127.296 145.98 127.296 142.9272 
+L 127.296 107.0568 
+Q 127.296 104.004 123.1488 104.004 
+L 79.6032 104.004 
+Q 75.456 104.004 75.456 107.0568 
+L 75.456 142.9272 
+Q 75.456 145.98 79.6032 145.98 
+z
+" clip-path="url(#p8fba227578)" style="fill: #eeeaf8; stroke: #7c6ccf; stroke-width: 0.9; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_7">
+    <text style="font-weight: 700; font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #7c6ccf" x="101.376" y="102.654675" transform="rotate(-0 101.376 102.654675)">2</text>
+   </g>
+   <g id="patch_21">
+    <path d="M 134.0352 145.98 
+L 185.3568 145.98 
+Q 189.504 145.98 189.504 142.9272 
+L 189.504 107.0568 
+Q 189.504 104.004 185.3568 104.004 
+L 134.0352 104.004 
+Q 129.888 104.004 129.888 107.0568 
+L 129.888 142.9272 
+Q 129.888 145.98 134.0352 145.98 
+z
+" clip-path="url(#p8fba227578)" style="fill: #e7f0f8; stroke: #0f4d92; stroke-width: 0.9; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_8">
+    <text style="font-weight: 700; font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #0f4d92" x="159.696" y="102.654675" transform="rotate(-0 159.696 102.654675)">3</text>
+   </g>
+   <g id="patch_22">
+    <path d="M 196.2432 145.98 
+L 247.5648 145.98 
+Q 251.712 145.98 251.712 142.9272 
+L 251.712 107.0568 
+Q 251.712 104.004 247.5648 104.004 
+L 196.2432 104.004 
+Q 192.096 104.004 192.096 107.0568 
+L 192.096 142.9272 
+Q 192.096 145.98 196.2432 145.98 
+z
+" clip-path="url(#p8fba227578)" style="fill: #eeeaf8; stroke: #7c6ccf; stroke-width: 0.9; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_9">
+    <text style="font-weight: 700; font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #7c6ccf" x="221.904" y="102.654675" transform="rotate(-0 221.904 102.654675)">4</text>
+   </g>
+   <g id="patch_23">
+    <path d="M 258.4512 145.98 
+L 309.7728 145.98 
+Q 313.92 145.98 313.92 142.9272 
+L 313.92 107.0568 
+Q 313.92 104.004 309.7728 104.004 
+L 258.4512 104.004 
+Q 254.304 104.004 254.304 107.0568 
+L 254.304 142.9272 
+Q 254.304 145.98 258.4512 145.98 
+z
+" clip-path="url(#p8fba227578)" style="fill: #e0f0f0; stroke: #42949e; stroke-width: 0.9; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_10">
+    <text style="font-weight: 700; font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #42949e" x="284.112" y="102.654675" transform="rotate(-0 284.112 102.654675)">5</text>
+   </g>
+   <g id="patch_24">
+    <path d="M 320.6592 145.98 
+L 371.9808 145.98 
+Q 376.128 145.98 376.128 142.9272 
+L 376.128 107.0568 
+Q 376.128 104.004 371.9808 104.004 
+L 320.6592 104.004 
+Q 316.512 104.004 316.512 107.0568 
+L 316.512 142.9272 
+Q 316.512 145.98 320.6592 145.98 
+z
+" clip-path="url(#p8fba227578)" style="fill: #eeeaf8; stroke: #7c6ccf; stroke-width: 0.9; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_11">
+    <text style="font-weight: 700; font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #7c6ccf" x="346.32" y="102.654675" transform="rotate(-0 346.32 102.654675)">6</text>
+   </g>
+   <g id="patch_25">
+    <path d="M 382.8672 145.98 
+L 429.0048 145.98 
+Q 433.152 145.98 433.152 142.9272 
+L 433.152 107.0568 
+Q 433.152 104.004 429.0048 104.004 
+L 382.8672 104.004 
+Q 378.72 104.004 378.72 107.0568 
+L 378.72 142.9272 
+Q 378.72 145.98 382.8672 145.98 
+z
+" clip-path="url(#p8fba227578)" style="fill: #e7f0f8; stroke: #0f4d92; stroke-width: 0.9; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_12">
+    <text style="font-weight: 700; font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #0f4d92" x="405.936" y="102.654675" transform="rotate(-0 405.936 102.654675)">7</text>
+   </g>
+   <g id="patch_26">
+    <path d="M 439.8912 145.98 
+L 486.0288 145.98 
+Q 490.176 145.98 490.176 142.9272 
+L 490.176 107.0568 
+Q 490.176 104.004 486.0288 104.004 
+L 439.8912 104.004 
+Q 435.744 104.004 435.744 107.0568 
+L 435.744 142.9272 
+Q 435.744 145.98 439.8912 145.98 
+z
+" clip-path="url(#p8fba227578)" style="fill: #eeeaf8; stroke: #7c6ccf; stroke-width: 0.9; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_13">
+    <text style="font-weight: 700; font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #7c6ccf" x="462.96" y="102.654675" transform="rotate(-0 462.96 102.654675)">8</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 4.9px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #66707a" x="490.6944" y="115.8336" transform="rotate(-0 490.6944 115.8336)">最终响应</text>
+   </g>
+   <g id="text_15">
+    <text style="font-weight: 700; font-size: 6.7px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #7c6ccf" x="84.7872" y="199.367289" transform="rotate(-0 84.7872 199.367289)">SafeHarness SecuritySession</text>
+   </g>
+   <g id="text_16">
+    <text style="font-size: 5.7px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #272727" x="84.7872" y="213.271317" transform="rotate(-0 84.7872 213.271317)">策略引擎：Inform  →  Verify  →  Constrain  →  Correct</text>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 5.2px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #66707a" x="84.7872" y="228.043787" transform="rotate(-0 84.7872 228.043787)">会话身份  ·  可信用户意图  ·  provenance  ·  调用 ID  ·  fail-closed 状态</text>
+   </g>
+   <g id="text_18">
+    <text style="font-weight: 700; font-size: 5.2px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #272727" x="308.736" y="200.454431" transform="rotate(-0 308.736 200.454431)">返回决策与执行义务</text>
+   </g>
+   <g id="text_19">
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #2e9e44" x="319.104" y="214.845075" transform="rotate(-0 319.104 214.845075)">允许</text>
+   </g>
+   <g id="text_20">
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #d99b2b" x="357.4656" y="214.845075" transform="rotate(-0 357.4656 214.845075)">修改</text>
+   </g>
+   <g id="text_21">
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #b64342" x="395.8272" y="214.845075" transform="rotate(-0 395.8272 214.845075)">拒绝</text>
+   </g>
+   <g id="text_22">
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #7c6ccf" x="434.1888" y="214.845075" transform="rotate(-0 434.1888 214.845075)">审批</text>
+   </g>
+   <g id="text_23">
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #66707a" x="267.264" y="176.757825" transform="rotate(-0 267.264 176.757825)">生命周期事件  ↓        ↑  决策 / obligation</text>
+   </g>
+   <g id="text_24">
+    <text style="font-weight: 700; font-size: 8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start" x="15.84" y="264.276" transform="rotate(-0 15.84 264.276)">b</text>
+   </g>
+   <g id="text_25">
+    <text style="font-weight: 700; font-size: 7.4px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #272727" x="28.8" y="266.313891" transform="rotate(-0 28.8 266.313891)">安全能力由可插拔服务支撑</text>
+   </g>
+   <g id="patch_27">
+    <path d="M 27.7632 304.344 
+L 107.5968 304.344 
+Q 111.744 304.344 111.744 301.2912 
+L 111.744 278.0136 
+Q 111.744 274.9608 107.5968 274.9608 
+L 27.7632 274.9608 
+Q 23.616 274.9608 23.616 278.0136 
+L 23.616 301.2912 
+Q 23.616 304.344 27.7632 304.344 
+z
+" clip-path="url(#p8fba227578)" style="fill: #f3f5f6; stroke: #bfc6cc; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_28">
+    <path d="M 121.0752 304.344 
+L 200.9088 304.344 
+Q 205.056 304.344 205.056 301.2912 
+L 205.056 278.0136 
+Q 205.056 274.9608 200.9088 274.9608 
+L 121.0752 274.9608 
+Q 116.928 274.9608 116.928 278.0136 
+L 116.928 301.2912 
+Q 116.928 304.344 121.0752 304.344 
+z
+" clip-path="url(#p8fba227578)" style="fill: #f3f5f6; stroke: #bfc6cc; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_29">
+    <path d="M 214.3872 304.344 
+L 294.2208 304.344 
+Q 298.368 304.344 298.368 301.2912 
+L 298.368 278.0136 
+Q 298.368 274.9608 294.2208 274.9608 
+L 214.3872 274.9608 
+Q 210.24 274.9608 210.24 278.0136 
+L 210.24 301.2912 
+Q 210.24 304.344 214.3872 304.344 
+z
+" clip-path="url(#p8fba227578)" style="fill: #f3f5f6; stroke: #bfc6cc; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_30">
+    <path d="M 27.7632 340.596 
+L 107.5968 340.596 
+Q 111.744 340.596 111.744 337.5432 
+L 111.744 314.2656 
+Q 111.744 311.2128 107.5968 311.2128 
+L 27.7632 311.2128 
+Q 23.616 311.2128 23.616 314.2656 
+L 23.616 337.5432 
+Q 23.616 340.596 27.7632 340.596 
+z
+" clip-path="url(#p8fba227578)" style="fill: #f3f5f6; stroke: #bfc6cc; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_31">
+    <path d="M 121.0752 340.596 
+L 200.9088 340.596 
+Q 205.056 340.596 205.056 337.5432 
+L 205.056 314.2656 
+Q 205.056 311.2128 200.9088 311.2128 
+L 121.0752 311.2128 
+Q 116.928 311.2128 116.928 314.2656 
+L 116.928 337.5432 
+Q 116.928 340.596 121.0752 340.596 
+z
+" clip-path="url(#p8fba227578)" style="fill: #f3f5f6; stroke: #bfc6cc; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_32">
+    <path d="M 214.3872 340.596 
+L 294.2208 340.596 
+Q 298.368 340.596 298.368 337.5432 
+L 298.368 314.2656 
+Q 298.368 311.2128 294.2208 311.2128 
+L 214.3872 311.2128 
+Q 210.24 311.2128 210.24 314.2656 
+L 210.24 337.5432 
+Q 210.24 340.596 214.3872 340.596 
+z
+" clip-path="url(#p8fba227578)" style="fill: #f3f5f6; stroke: #bfc6cc; stroke-width: 0.7; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_26">
+    <text style="font-size: 4.9px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #66707a" x="26.208" y="356.064614" transform="rotate(-0 26.208 356.064614)">当前 Demo 多为内存实现；生产环境需外置网关、密钥隔离与持久化后端。</text>
+   </g>
+   <g id="text_27">
+    <text style="font-weight: 700; font-size: 8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start" x="326.88" y="264.276" transform="rotate(-0 326.88 264.276)">c</text>
+   </g>
+   <g id="text_28">
+    <text style="font-weight: 700; font-size: 7.4px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #272727" x="339.84" y="266.313891" transform="rotate(-0 339.84 266.313891)">职责与安全边界</text>
+   </g>
+   <g id="text_29">
+    <text style="font-weight: 700; font-size: 7px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #0f4d92" x="338.8032" y="275.595625" transform="rotate(-0 338.8032 275.595625)">智能体：决定“做什么”</text>
+   </g>
+   <g id="text_30">
+    <text style="font-size: 5.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; fill: #272727" transform="translate(338.8032 286.084375)">理解任务 · 推理规划</text>
+    <text style="font-size: 5.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; fill: #272727" transform="translate(338.8032 294.017144)">选择工具 · 生成回答</text>
+   </g>
+   <g id="text_31">
+    <text style="font-weight: 700; font-size: 7px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #7c6ccf" x="432.1152" y="275.595625" transform="rotate(-0 432.1152 275.595625)">SafeHarness：执行安全裁决</text>
+   </g>
+   <g id="text_32">
+    <text style="font-size: 5.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; fill: #272727" transform="translate(432.1152 286.084375)">决定能否及如何执行</text>
+    <text style="font-size: 5.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; fill: #272727" transform="translate(432.1152 294.017144)">检查 · 授权 · 阻断 · 审计 · 恢复</text>
+   </g>
+   <g id="text_33">
+    <text style="font-weight: 700; font-size: 5.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #272727" x="338.2848" y="341.797975" transform="rotate(-0 338.2848 341.797975)">部署边界</text>
+   </g>
+   <g id="text_34">
+    <text style="font-size: 4.6px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start; fill: #66707a" x="338.2848" y="351.729806" transform="rotate(-0 338.2848 351.729806)">当前 Alpha：进程内控制   |   生产：独立工具网关 + 持久化审计 / 状态</text>
+   </g>
+   <g id="text_35">
+    <text style="font-weight: 700; font-size: 6.4px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #0f4d92" x="48.24" y="121.4121" transform="rotate(-0 48.24 121.4121)">输入上下文</text>
+   </g>
+   <g id="text_36">
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; fill: #66707a" transform="translate(35.98725 131.142975)">用户 / RAG</text>
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; fill: #66707a" transform="translate(43.44 136.748775)">记忆</text>
+   </g>
+   <g id="text_37">
+    <text style="font-weight: 700; font-size: 6.4px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #7c6ccf" x="101.376" y="121.4121" transform="rotate(-0 101.376 121.4121)">输入防护</text>
+   </g>
+   <g id="text_38">
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; fill: #66707a" transform="translate(91.776 131.142975)">注入检测</text>
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; fill: #66707a" transform="translate(89.376 136.748775)">清洗与溯源</text>
+   </g>
+   <g id="text_39">
+    <text style="font-weight: 700; font-size: 6.4px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #0f4d92" x="159.696" y="121.4121" transform="rotate(-0 159.696 121.4121)">智能体推理</text>
+   </g>
+   <g id="text_40">
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #66707a" x="159.696" y="133.945875" transform="rotate(-0 159.696 133.945875)">LLM / 规划器</text>
+   </g>
+   <g id="text_41">
+    <text style="font-weight: 700; font-size: 6.4px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #7c6ccf" x="221.904" y="121.4121" transform="rotate(-0 221.904 121.4121)">工具前防护</text>
+   </g>
+   <g id="text_42">
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; fill: #66707a" transform="translate(212.304 131.142975)">意图对齐</text>
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; fill: #66707a" transform="translate(205.6545 136.748775)">Schema / 令牌</text>
+   </g>
+   <g id="text_43">
+    <text style="font-weight: 700; font-size: 6.4px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #42949e" x="284.112" y="121.4121" transform="rotate(-0 284.112 121.4121)">NMS / 工具</text>
+   </g>
+   <g id="text_44">
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; fill: #66707a" transform="translate(276.912 131.142975)">查询或</text>
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; fill: #66707a" transform="translate(272.112 136.748775)">外部副作用</text>
+   </g>
+   <g id="text_45">
+    <text style="font-weight: 700; font-size: 6.4px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #7c6ccf" x="346.32" y="121.4121" transform="rotate(-0 346.32 121.4121)">工具后防护</text>
+   </g>
+   <g id="text_46">
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; fill: #66707a" transform="translate(336.72 131.142975)">结果扫描</text>
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; fill: #66707a" transform="translate(334.27425 136.748775)">补偿 / 恢复</text>
+   </g>
+   <g id="text_47">
+    <text style="font-weight: 700; font-size: 6.4px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #0f4d92" x="405.936" y="121.4121" transform="rotate(-0 405.936 121.4121)">继续推理</text>
+   </g>
+   <g id="text_48">
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #66707a" x="405.936" y="133.945875" transform="rotate(-0 405.936 133.945875)">观察 → 决策</text>
+   </g>
+   <g id="text_49">
+    <text style="font-weight: 700; font-size: 6.4px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #7c6ccf" x="462.96" y="121.4121" transform="rotate(-0 462.96 121.4121)">输出防护</text>
+   </g>
+   <g id="text_50">
+    <text style="font-size: 4.8px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #66707a" x="462.96" y="133.945875" transform="rotate(-0 462.96 133.945875)">最终响应检查</text>
+   </g>
+   <g id="text_51">
+    <text style="font-weight: 700; font-size: 5.7px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #272727" x="67.68" y="287.740242" transform="rotate(-0 67.68 287.740242)">语义 Judge</text>
+   </g>
+   <g id="text_52">
+    <text style="font-size: 4.5px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #66707a" x="67.68" y="296.005098" transform="rotate(-0 67.68 296.005098)">注入与意图对齐</text>
+   </g>
+   <g id="text_53">
+    <text style="font-weight: 700; font-size: 5.7px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #272727" x="160.992" y="287.642719" transform="rotate(-0 160.992 287.642719)">工具目录</text>
+   </g>
+   <g id="text_54">
+    <text style="font-size: 4.5px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #66707a" x="160.992" y="296.005098" transform="rotate(-0 160.992 296.005098)">可信描述与 Schema</text>
+   </g>
+   <g id="text_55">
+    <text style="font-weight: 700; font-size: 5.7px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #272727" x="254.304" y="287.642719" transform="rotate(-0 254.304 287.642719)">签名能力授权</text>
+   </g>
+   <g id="text_56">
+    <text style="font-size: 4.5px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #66707a" x="254.304" y="296.005098" transform="rotate(-0 254.304 296.005098)">单次令牌 / 防重放</text>
+   </g>
+   <g id="text_57">
+    <text style="font-weight: 700; font-size: 5.7px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #272727" x="67.68" y="323.894719" transform="rotate(-0 67.68 323.894719)">人工审批</text>
+   </g>
+   <g id="text_58">
+    <text style="font-size: 4.5px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #66707a" x="67.68" y="332.257098" transform="rotate(-0 67.68 332.257098)">高风险动作确认</text>
+   </g>
+   <g id="text_59">
+    <text style="font-weight: 700; font-size: 5.7px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #272727" x="160.992" y="323.894719" transform="rotate(-0 160.992 323.894719)">审计后端</text>
+   </g>
+   <g id="text_60">
+    <text style="font-size: 4.5px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #66707a" x="160.992" y="332.257098" transform="rotate(-0 160.992 332.257098)">最小化事件与回执</text>
+   </g>
+   <g id="text_61">
+    <text style="font-weight: 700; font-size: 5.7px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #272727" x="254.304" y="323.894719" transform="rotate(-0 254.304 323.894719)">状态 / 补偿</text>
+   </g>
+   <g id="text_62">
+    <text style="font-size: 4.5px; font-family: 'Microsoft YaHei', 'Arial', 'SimHei', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle; fill: #66707a" x="254.304" y="332.257098" transform="rotate(-0 254.304 332.257098)">检查点与恢复语义</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p8fba227578">
+   <rect x="2.88" y="2.88" width="518.4" height="381.6"/>
+  </clipPath>
+ </defs>
+</svg>

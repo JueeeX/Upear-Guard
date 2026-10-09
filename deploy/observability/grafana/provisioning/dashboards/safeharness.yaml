@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: SafeHarness
+    orgId: 1
+    folder: SafeHarness
+    type: file
+    disableDeletion: true
+    editable: false
+    options:
+      path: /var/lib/grafana/dashboards

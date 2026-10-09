@@ -1,0 +1,743 @@
+name: safeharness-staging
+
+services:
+  config-check:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_POSTGRES_ADMIN_PASSWORD: ${SAFEHARNESS_POSTGRES_ADMIN_PASSWORD:?set in config/deployment.env}
+      SAFEHARNESS_POSTGRES_MIGRATOR_PASSWORD: ${SAFEHARNESS_POSTGRES_MIGRATOR_PASSWORD:?set in config/deployment.env}
+      SAFEHARNESS_POSTGRES_WRITER_PASSWORD: ${SAFEHARNESS_POSTGRES_WRITER_PASSWORD:?set in config/deployment.env}
+      SAFEHARNESS_POSTGRES_READER_PASSWORD: ${SAFEHARNESS_POSTGRES_READER_PASSWORD:?set in config/deployment.env}
+      SAFEHARNESS_POSTGRES_RETENTION_PASSWORD: ${SAFEHARNESS_POSTGRES_RETENTION_PASSWORD:?set in config/deployment.env}
+      SAFEHARNESS_REDIS_PASSWORD: ${SAFEHARNESS_REDIS_PASSWORD:?set in config/deployment.env}
+      SAFEHARNESS_REDIS_GATEWAY_PASSWORD: ${SAFEHARNESS_REDIS_GATEWAY_PASSWORD:?set in config/deployment.env}
+      SAFEHARNESS_REDIS_COMMUNICATION_PASSWORD: ${SAFEHARNESS_REDIS_COMMUNICATION_PASSWORD:?set in config/deployment.env}
+      SAFEHARNESS_GATEWAY_API_KEY: ${SAFEHARNESS_GATEWAY_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_GATEWAY_SIGNING_KEY: ${SAFEHARNESS_GATEWAY_SIGNING_KEY:?set in config/deployment.env}
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_SIGNING_KEY: ${SAFEHARNESS_ENFORCEMENT_RECEIPT_SIGNING_KEY:?set in config/deployment.env}
+      GRAFANA_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set in config/deployment.env}
+    command: ["python", "deploy/compose/validate_env.py"]
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: "no"
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: safeharness
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${SAFEHARNESS_POSTGRES_ADMIN_PASSWORD:?set in config/deployment.env}
+      SAFEHARNESS_POSTGRES_MIGRATOR_PASSWORD: ${SAFEHARNESS_POSTGRES_MIGRATOR_PASSWORD:?set in config/deployment.env}
+      SAFEHARNESS_POSTGRES_WRITER_PASSWORD: ${SAFEHARNESS_POSTGRES_WRITER_PASSWORD:?set in config/deployment.env}
+      SAFEHARNESS_POSTGRES_READER_PASSWORD: ${SAFEHARNESS_POSTGRES_READER_PASSWORD:?set in config/deployment.env}
+      SAFEHARNESS_POSTGRES_RETENTION_PASSWORD: ${SAFEHARNESS_POSTGRES_RETENTION_PASSWORD:?set in config/deployment.env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../postgres/bootstrap.sh:/docker-entrypoint-initdb.d/10-safeharness-bootstrap.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d safeharness"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      config-check:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks: [backend]
+
+  redis:
+    image: redis:7.4-alpine
+    environment:
+      SAFEHARNESS_REDIS_PASSWORD: ${SAFEHARNESS_REDIS_PASSWORD:?set in config/deployment.env}
+      SAFEHARNESS_REDIS_GATEWAY_PASSWORD: ${SAFEHARNESS_REDIS_GATEWAY_PASSWORD:?set in config/deployment.env}
+      SAFEHARNESS_REDIS_COMMUNICATION_PASSWORD: ${SAFEHARNESS_REDIS_COMMUNICATION_PASSWORD:?set in config/deployment.env}
+    command: ["sh", "/opt/safeharness/start-redis.sh"]
+    volumes:
+      - redis-data:/data
+      - ../redis/start-redis.sh:/opt/safeharness/start-redis.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning --user safeharness_gateway -a \"$$SAFEHARNESS_REDIS_GATEWAY_PASSWORD\" ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      config-check:
+        condition: service_completed_successfully
+    user: redis
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+    networks: [backend]
+
+  postgres-migrate:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_TOOL_GATEWAY_POSTGRES_DSN: postgresql://safeharness_migrator:${SAFEHARNESS_POSTGRES_MIGRATOR_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_TOOL_GATEWAY_POSTGRES_RUNTIME_ROLE: safeharness_writer
+      SAFEHARNESS_TOOL_GATEWAY_POSTGRES_READER_ROLE: safeharness_reader
+    command: ["safeharness-postgres-init"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks: [backend]
+
+  gateway:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_TOOL_GATEWAY_API_KEY: ${SAFEHARNESS_GATEWAY_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_TOOL_GATEWAY_SIGNING_KEY: ${SAFEHARNESS_GATEWAY_SIGNING_KEY:?set in config/deployment.env}
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_SIGNING_KEY: ${SAFEHARNESS_ENFORCEMENT_RECEIPT_SIGNING_KEY:?set in config/deployment.env}
+      SAFEHARNESS_REQUIRE_ENFORCEMENT_RECEIPT: "true"
+      SAFEHARNESS_TOOL_GATEWAY_HOST: 0.0.0.0
+      SAFEHARNESS_TOOL_GATEWAY_PORT: 38100
+      SAFEHARNESS_TOOL_GATEWAY_TENANT_ID: fiberhome-demo
+      SAFEHARNESS_TOOL_GATEWAY_AGENT_ID: noc-operator-agent
+      SAFEHARNESS_TOOL_GATEWAY_REPLAY_BACKEND: redis
+      SAFEHARNESS_TOOL_GATEWAY_AUDIT_BACKEND: postgres
+      SAFEHARNESS_TOOL_GATEWAY_REDIS_URL: redis://safeharness_gateway:${SAFEHARNESS_REDIS_GATEWAY_PASSWORD:?set in config/deployment.env}@redis:6379/0
+      SAFEHARNESS_TOOL_GATEWAY_POSTGRES_DSN: postgresql://safeharness_writer:${SAFEHARNESS_POSTGRES_WRITER_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_OTEL_ENABLED: "true"
+      SAFEHARNESS_OTEL_SERVICE_NAME: safeharness-tool-gateway
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_METRIC_EXPORT_INTERVAL: 5000
+    ports:
+      - "127.0.0.1:38100:38100"
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:38100/health',headers={'Authorization':'Bearer '+os.environ['SAFEHARNESS_TOOL_GATEWAY_API_KEY']}); raise SystemExit(0 if urllib.request.urlopen(r,timeout=2).status == 200 else 1)\"",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+    networks: [edge, backend]
+
+  gateway-replica:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_TOOL_GATEWAY_API_KEY: ${SAFEHARNESS_GATEWAY_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_TOOL_GATEWAY_SIGNING_KEY: ${SAFEHARNESS_GATEWAY_SIGNING_KEY:?set in config/deployment.env}
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_SIGNING_KEY: ${SAFEHARNESS_ENFORCEMENT_RECEIPT_SIGNING_KEY:?set in config/deployment.env}
+      SAFEHARNESS_REQUIRE_ENFORCEMENT_RECEIPT: "true"
+      SAFEHARNESS_TOOL_GATEWAY_HOST: 0.0.0.0
+      SAFEHARNESS_TOOL_GATEWAY_PORT: 38100
+      SAFEHARNESS_TOOL_GATEWAY_TENANT_ID: fiberhome-demo
+      SAFEHARNESS_TOOL_GATEWAY_AGENT_ID: noc-operator-agent
+      SAFEHARNESS_TOOL_GATEWAY_REPLAY_BACKEND: redis
+      SAFEHARNESS_TOOL_GATEWAY_AUDIT_BACKEND: postgres
+      SAFEHARNESS_TOOL_GATEWAY_REDIS_URL: redis://safeharness_gateway:${SAFEHARNESS_REDIS_GATEWAY_PASSWORD:?set in config/deployment.env}@redis:6379/0
+      SAFEHARNESS_TOOL_GATEWAY_POSTGRES_DSN: postgresql://safeharness_writer:${SAFEHARNESS_POSTGRES_WRITER_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_OTEL_ENABLED: "true"
+      SAFEHARNESS_OTEL_SERVICE_NAME: safeharness-tool-gateway
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_METRIC_EXPORT_INTERVAL: 5000
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:38100/health',headers={'Authorization':'Bearer '+os.environ['SAFEHARNESS_TOOL_GATEWAY_API_KEY']}); raise SystemExit(0 if urllib.request.urlopen(r,timeout=2).status == 200 else 1)\"",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+    networks: [backend]
+
+  receipt-keygen:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    command: ["python", "-m", "deploy.smoke.generate_receipt_keys"]
+    volumes:
+      - receipt-private:/receipt-private
+      - receipt-public:/receipt-public
+    user: root
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    restart: "no"
+    profiles: [asymmetric-test]
+
+  asymmetric-gateway:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_TOOL_GATEWAY_API_KEY: ${SAFEHARNESS_GATEWAY_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_TOOL_GATEWAY_SIGNING_KEY: ${SAFEHARNESS_GATEWAY_SIGNING_KEY:?set in config/deployment.env}
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_MODE: ed25519
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_KEY_ID: noc-control-plane-2026-07
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_PUBLIC_KEY_FILE: /receipt-public/receipt-public.pem
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_ISSUER: safeharness-control-plane
+      SAFEHARNESS_REQUIRE_ENFORCEMENT_RECEIPT: "true"
+      SAFEHARNESS_TOOL_GATEWAY_HOST: 0.0.0.0
+      SAFEHARNESS_TOOL_GATEWAY_PORT: 38100
+      SAFEHARNESS_TOOL_GATEWAY_TENANT_ID: fiberhome-demo
+      SAFEHARNESS_TOOL_GATEWAY_AGENT_ID: noc-operator-agent
+      SAFEHARNESS_TOOL_GATEWAY_REPLAY_BACKEND: redis
+      SAFEHARNESS_TOOL_GATEWAY_AUDIT_BACKEND: postgres
+      SAFEHARNESS_TOOL_GATEWAY_REDIS_URL: redis://safeharness_gateway:${SAFEHARNESS_REDIS_GATEWAY_PASSWORD:?set in config/deployment.env}@redis:6379/0
+      SAFEHARNESS_TOOL_GATEWAY_POSTGRES_DSN: postgresql://safeharness_writer:${SAFEHARNESS_POSTGRES_WRITER_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_OTEL_ENABLED: "true"
+      SAFEHARNESS_OTEL_SERVICE_NAME: safeharness-asymmetric-tool-gateway
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_METRIC_EXPORT_INTERVAL: 5000
+    volumes:
+      - receipt-public:/receipt-public:ro
+    depends_on:
+      receipt-keygen:
+        condition: service_completed_successfully
+      postgres-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:38100/health',headers={'Authorization':'Bearer '+os.environ['SAFEHARNESS_TOOL_GATEWAY_API_KEY']}); raise SystemExit(0 if urllib.request.urlopen(r,timeout=2).status == 200 else 1)\"",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+    networks: [backend]
+    profiles: [asymmetric-test]
+
+  asymmetric-gateway-replica:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_TOOL_GATEWAY_API_KEY: ${SAFEHARNESS_GATEWAY_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_TOOL_GATEWAY_SIGNING_KEY: ${SAFEHARNESS_GATEWAY_SIGNING_KEY:?set in config/deployment.env}
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_MODE: ed25519
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_KEY_ID: noc-control-plane-2026-07
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_PUBLIC_KEY_FILE: /receipt-public/receipt-public.pem
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_ISSUER: safeharness-control-plane
+      SAFEHARNESS_REQUIRE_ENFORCEMENT_RECEIPT: "true"
+      SAFEHARNESS_TOOL_GATEWAY_HOST: 0.0.0.0
+      SAFEHARNESS_TOOL_GATEWAY_PORT: 38100
+      SAFEHARNESS_TOOL_GATEWAY_TENANT_ID: fiberhome-demo
+      SAFEHARNESS_TOOL_GATEWAY_AGENT_ID: noc-operator-agent
+      SAFEHARNESS_TOOL_GATEWAY_REPLAY_BACKEND: redis
+      SAFEHARNESS_TOOL_GATEWAY_AUDIT_BACKEND: postgres
+      SAFEHARNESS_TOOL_GATEWAY_REDIS_URL: redis://safeharness_gateway:${SAFEHARNESS_REDIS_GATEWAY_PASSWORD:?set in config/deployment.env}@redis:6379/0
+      SAFEHARNESS_TOOL_GATEWAY_POSTGRES_DSN: postgresql://safeharness_writer:${SAFEHARNESS_POSTGRES_WRITER_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_OTEL_ENABLED: "true"
+      SAFEHARNESS_OTEL_SERVICE_NAME: safeharness-asymmetric-tool-gateway
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_METRIC_EXPORT_INTERVAL: 5000
+    volumes:
+      - receipt-public:/receipt-public:ro
+    depends_on:
+      receipt-keygen:
+        condition: service_completed_successfully
+      postgres-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:38100/health',headers={'Authorization':'Bearer '+os.environ['SAFEHARNESS_TOOL_GATEWAY_API_KEY']}); raise SystemExit(0 if urllib.request.urlopen(r,timeout=2).status == 200 else 1)\"",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+    networks: [backend]
+    profiles: [asymmetric-test]
+
+  asymmetric-smoke-test:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_TOOL_GATEWAY_URL: http://asymmetric-gateway:38100
+      SAFEHARNESS_SMOKE_GATEWAY_REPLICA_URL: http://asymmetric-gateway-replica:38100
+      SAFEHARNESS_TOOL_GATEWAY_API_KEY: ${SAFEHARNESS_GATEWAY_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_MODE: ed25519
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_KEY_ID: noc-control-plane-2026-07
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_PRIVATE_KEY_FILE: /receipt-private/receipt-private.pem
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_ISSUER: safeharness-control-plane
+      SAFEHARNESS_TOOL_GATEWAY_POSTGRES_DSN: postgresql://safeharness_migrator:${SAFEHARNESS_POSTGRES_MIGRATOR_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_SMOKE_POSTGRES_WRITER_DSN: postgresql://safeharness_writer:${SAFEHARNESS_POSTGRES_WRITER_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_SMOKE_POSTGRES_READER_DSN: postgresql://safeharness_reader:${SAFEHARNESS_POSTGRES_READER_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_TOOL_GATEWAY_REDIS_URL: redis://safeharness_gateway:${SAFEHARNESS_REDIS_GATEWAY_PASSWORD:?set in config/deployment.env}@redis:6379/0
+      SAFEHARNESS_SMOKE_REDIS_ADMIN_URL: redis://safeharness_admin:${SAFEHARNESS_REDIS_PASSWORD:?set in config/deployment.env}@redis:6379/0
+      SAFEHARNESS_SMOKE_OTEL_METRICS_URL: http://otel-collector:8889/metrics
+    volumes:
+      - receipt-private:/receipt-private:ro
+    command: ["python", "-m", "deploy.smoke.asymmetric_receipt"]
+    depends_on:
+      asymmetric-gateway:
+        condition: service_healthy
+      asymmetric-gateway-replica:
+        condition: service_healthy
+    restart: "no"
+    networks: [backend]
+    profiles: [asymmetric-test]
+
+  smoke-test:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_TOOL_GATEWAY_URL: http://gateway:38100
+      SAFEHARNESS_SMOKE_GATEWAY_REPLICA_URL: http://gateway-replica:38100
+      SAFEHARNESS_TOOL_GATEWAY_API_KEY: ${SAFEHARNESS_GATEWAY_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_SIGNING_KEY: ${SAFEHARNESS_ENFORCEMENT_RECEIPT_SIGNING_KEY:?set in config/deployment.env}
+      SAFEHARNESS_TOOL_GATEWAY_POSTGRES_DSN: postgresql://safeharness_migrator:${SAFEHARNESS_POSTGRES_MIGRATOR_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_SMOKE_POSTGRES_WRITER_DSN: postgresql://safeharness_writer:${SAFEHARNESS_POSTGRES_WRITER_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_SMOKE_POSTGRES_READER_DSN: postgresql://safeharness_reader:${SAFEHARNESS_POSTGRES_READER_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_TOOL_GATEWAY_REDIS_URL: redis://safeharness_gateway:${SAFEHARNESS_REDIS_GATEWAY_PASSWORD:?set in config/deployment.env}@redis:6379/0
+      SAFEHARNESS_SMOKE_REDIS_ADMIN_URL: redis://safeharness_admin:${SAFEHARNESS_REDIS_PASSWORD:?set in config/deployment.env}@redis:6379/0
+      SAFEHARNESS_SMOKE_OTEL_METRICS_URL: http://otel-collector:8889/metrics
+    command: ["python", "-m", "deploy.smoke.staging_smoke"]
+    depends_on:
+      gateway:
+        condition: service_healthy
+      gateway-replica:
+        condition: service_healthy
+    restart: "no"
+    networks: [backend]
+    profiles: [test]
+
+  communication-data-init:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    command:
+      ["sh", "-c", "chown -R safeharness:safeharness /communication-data"]
+    volumes:
+      - communication-data:/communication-data
+    user: root
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    restart: "no"
+    profiles: [communication-test]
+
+  communication-gateway:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_COMMUNICATION_GATEWAY_HOST: 0.0.0.0
+      SAFEHARNESS_COMMUNICATION_GATEWAY_PORT: 38200
+      SAFEHARNESS_COMMUNICATION_DATABASE: /communication-data/agent-communication.sqlite3
+      SAFEHARNESS_COMMUNICATION_TENANT_ID: fiberhome-demo
+      SAFEHARNESS_COMMUNICATION_SUPERVISOR_AGENT_ID: noc-supervisor-agent
+      SAFEHARNESS_COMMUNICATION_DIAGNOSIS_AGENT_ID: noc-diagnosis-agent
+      SAFEHARNESS_COMMUNICATION_SUPERVISOR_API_KEY: ${SAFEHARNESS_COMMUNICATION_SUPERVISOR_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_COMMUNICATION_DIAGNOSIS_API_KEY: ${SAFEHARNESS_COMMUNICATION_DIAGNOSIS_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_COMMUNICATION_SUPERVISOR_PREVIOUS_API_KEY: ${SAFEHARNESS_COMMUNICATION_SUPERVISOR_PREVIOUS_API_KEY:-}
+      SAFEHARNESS_COMMUNICATION_DIAGNOSIS_PREVIOUS_API_KEY: ${SAFEHARNESS_COMMUNICATION_DIAGNOSIS_PREVIOUS_API_KEY:-}
+      SAFEHARNESS_COMMUNICATION_COORDINATION_SIGNING_KEY: ${SAFEHARNESS_COMMUNICATION_COORDINATION_SIGNING_KEY:?set in config/deployment.env}
+      SAFEHARNESS_COMMUNICATION_COORDINATION_BACKEND: ${SAFEHARNESS_COMMUNICATION_COORDINATION_BACKEND:-sqlite}
+      SAFEHARNESS_COMMUNICATION_COORDINATION_POSTGRES_DSN: ${SAFEHARNESS_COMMUNICATION_COORDINATION_POSTGRES_DSN:-}
+      SAFEHARNESS_COMMUNICATION_ADMIN_ACTOR: noc-security-admin
+      SAFEHARNESS_COMMUNICATION_ADMIN_API_KEY: ${SAFEHARNESS_COMMUNICATION_ADMIN_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_COMMUNICATION_ADMIN_PREVIOUS_API_KEY: ${SAFEHARNESS_COMMUNICATION_ADMIN_PREVIOUS_API_KEY:-}
+      SAFEHARNESS_COMMUNICATION_SESSION_ID: noc-multi-agent-session
+      SAFEHARNESS_COMMUNICATION_RUN_ID: noc-multi-agent-run
+      SAFEHARNESS_COMMUNICATION_DELEGATION_ID: noc-read-only-diagnosis
+      SAFEHARNESS_COMMUNICATION_DELEGATION_MAX_MESSAGES: 1000
+      SAFEHARNESS_COMMUNICATION_DELEGATION_TTL_SECONDS: 86400
+      SAFEHARNESS_COMMUNICATION_RATE_LIMIT_REDIS_URL: redis://safeharness_communication:${SAFEHARNESS_REDIS_COMMUNICATION_PASSWORD:?set in config/deployment.env}@redis:6379/0
+      SAFEHARNESS_COMMUNICATION_RATE_LIMIT_REQUESTS: 120
+      SAFEHARNESS_COMMUNICATION_RATE_LIMIT_WINDOW_SECONDS: 60
+      SAFEHARNESS_OTEL_ENABLED: "true"
+      SAFEHARNESS_OTEL_SERVICE_NAME: safeharness-agent-communication-gateway
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_METRIC_EXPORT_INTERVAL: 5000
+    command: ["python", "-m", "examples.langgraph_noc.communication_gateway"]
+    volumes:
+      - communication-data:/communication-data
+    ports:
+      - "127.0.0.1:38200:38200"
+    depends_on:
+      communication-data-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:38200/health',headers={'Authorization':'Bearer '+os.environ['SAFEHARNESS_COMMUNICATION_SUPERVISOR_API_KEY']}); raise SystemExit(0 if urllib.request.urlopen(r,timeout=2).status == 200 else 1)\"",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: "no"
+    networks: [edge, backend]
+    profiles: [communication-test]
+
+  communication-smoke-test:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_COMMUNICATION_GATEWAY_URL: http://communication-gateway:38200
+      SAFEHARNESS_COMMUNICATION_DATABASE: /communication-data/agent-communication.sqlite3
+      SAFEHARNESS_COMMUNICATION_TENANT_ID: fiberhome-demo
+      SAFEHARNESS_COMMUNICATION_SUPERVISOR_AGENT_ID: noc-supervisor-agent
+      SAFEHARNESS_COMMUNICATION_DIAGNOSIS_AGENT_ID: noc-diagnosis-agent
+      SAFEHARNESS_COMMUNICATION_SUPERVISOR_API_KEY: ${SAFEHARNESS_COMMUNICATION_SUPERVISOR_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_COMMUNICATION_DIAGNOSIS_API_KEY: ${SAFEHARNESS_COMMUNICATION_DIAGNOSIS_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_COMMUNICATION_ADMIN_API_KEY: ${SAFEHARNESS_COMMUNICATION_ADMIN_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_COMMUNICATION_SESSION_ID: noc-multi-agent-session
+      SAFEHARNESS_COMMUNICATION_RUN_ID: noc-multi-agent-run
+      SAFEHARNESS_COMMUNICATION_DELEGATION_ID: noc-read-only-diagnosis
+    volumes:
+      - communication-data:/communication-data:ro
+    command: ["python", "-m", "deploy.smoke.agent_communication"]
+    depends_on:
+      communication-gateway:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: "no"
+    networks: [backend]
+    profiles: [communication-test]
+
+  communication-postgres-migrate:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_COMMUNICATION_POSTGRES_DSN: postgresql://safeharness_migrator:${SAFEHARNESS_POSTGRES_MIGRATOR_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_COMMUNICATION_RUNTIME_ROLE: safeharness_writer
+      SAFEHARNESS_COMMUNICATION_READER_ROLE: safeharness_reader
+      SAFEHARNESS_COMMUNICATION_RETENTION_ROLE: safeharness_retention
+    command: ["safeharness-communication-init"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks: [backend]
+    profiles: [communication-postgres-test]
+
+  communication-postgres-smoke:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_COMMUNICATION_POSTGRES_DSN: postgresql://safeharness_writer:${SAFEHARNESS_POSTGRES_WRITER_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_COMMUNICATION_READER_DSN: postgresql://safeharness_reader:${SAFEHARNESS_POSTGRES_READER_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_COMMUNICATION_RETENTION_DSN: postgresql://safeharness_retention:${SAFEHARNESS_POSTGRES_RETENTION_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+    command: ["python", "deploy/smoke/communication_postgres.py"]
+    depends_on:
+      communication-postgres-migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: "no"
+    networks: [backend]
+    profiles: [communication-postgres-test]
+
+  communication-maintenance:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_COMMUNICATION_RETENTION_DSN: postgresql://safeharness_retention:${SAFEHARNESS_POSTGRES_RETENTION_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_COMMUNICATION_READER_DSN: postgresql://safeharness_reader:${SAFEHARNESS_POSTGRES_READER_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_COMMUNICATION_RETENTION_HOURS: 168
+      SAFEHARNESS_COMMUNICATION_MAINTENANCE_INTERVAL: 300
+      SAFEHARNESS_COMMUNICATION_AUDIT_EXPORT_URL: ${SAFEHARNESS_COMMUNICATION_AUDIT_EXPORT_URL:-}
+      SAFEHARNESS_COMMUNICATION_AUDIT_EXPORT_TOKEN: ${SAFEHARNESS_COMMUNICATION_AUDIT_EXPORT_TOKEN:-}
+      SAFEHARNESS_COMMUNICATION_AUDIT_CURSOR_FILE: /maintenance-state/audit-export.cursor.json
+    command: ["safeharness-communication-maintain"]
+    volumes:
+      - communication-maintenance-state:/maintenance-state
+    depends_on:
+      communication-postgres-migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+    networks: [backend]
+    profiles: [communication-maintenance]
+
+  redis-failure-gateway:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_TOOL_GATEWAY_API_KEY: ${SAFEHARNESS_GATEWAY_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_TOOL_GATEWAY_SIGNING_KEY: ${SAFEHARNESS_GATEWAY_SIGNING_KEY:?set in config/deployment.env}
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_SIGNING_KEY: ${SAFEHARNESS_ENFORCEMENT_RECEIPT_SIGNING_KEY:?set in config/deployment.env}
+      SAFEHARNESS_REQUIRE_ENFORCEMENT_RECEIPT: "true"
+      SAFEHARNESS_TOOL_GATEWAY_HOST: 0.0.0.0
+      SAFEHARNESS_TOOL_GATEWAY_PORT: 38100
+      SAFEHARNESS_TOOL_GATEWAY_TENANT_ID: fiberhome-demo
+      SAFEHARNESS_TOOL_GATEWAY_AGENT_ID: noc-operator-agent
+      SAFEHARNESS_TOOL_GATEWAY_REPLAY_BACKEND: redis
+      SAFEHARNESS_TOOL_GATEWAY_AUDIT_BACKEND: postgres
+      SAFEHARNESS_TOOL_GATEWAY_REDIS_URL: redis://safeharness_gateway:${SAFEHARNESS_REDIS_GATEWAY_PASSWORD:?set in config/deployment.env}@127.0.0.1:6399/0
+      SAFEHARNESS_TOOL_GATEWAY_POSTGRES_DSN: postgresql://safeharness_writer:${SAFEHARNESS_POSTGRES_WRITER_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: "no"
+    networks: [backend]
+    profiles: [failure-test]
+
+  postgres-failure-gateway:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_TOOL_GATEWAY_API_KEY: ${SAFEHARNESS_GATEWAY_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_TOOL_GATEWAY_SIGNING_KEY: ${SAFEHARNESS_GATEWAY_SIGNING_KEY:?set in config/deployment.env}
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_SIGNING_KEY: ${SAFEHARNESS_ENFORCEMENT_RECEIPT_SIGNING_KEY:?set in config/deployment.env}
+      SAFEHARNESS_REQUIRE_ENFORCEMENT_RECEIPT: "true"
+      SAFEHARNESS_TOOL_GATEWAY_HOST: 0.0.0.0
+      SAFEHARNESS_TOOL_GATEWAY_PORT: 38100
+      SAFEHARNESS_TOOL_GATEWAY_TENANT_ID: fiberhome-demo
+      SAFEHARNESS_TOOL_GATEWAY_AGENT_ID: noc-operator-agent
+      SAFEHARNESS_TOOL_GATEWAY_REPLAY_BACKEND: redis
+      SAFEHARNESS_TOOL_GATEWAY_AUDIT_BACKEND: postgres
+      SAFEHARNESS_TOOL_GATEWAY_REDIS_URL: redis://safeharness_gateway:${SAFEHARNESS_REDIS_GATEWAY_PASSWORD:?set in config/deployment.env}@redis:6379/0
+      SAFEHARNESS_TOOL_GATEWAY_POSTGRES_DSN: postgresql://safeharness_writer:${SAFEHARNESS_POSTGRES_WRITER_PASSWORD:?set in config/deployment.env}@127.0.0.1:6543/safeharness
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres-migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: "no"
+    networks: [backend]
+    profiles: [failure-test]
+
+  dependency-failure-test:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      SAFEHARNESS_SMOKE_REDIS_FAILURE_GATEWAY_URL: http://redis-failure-gateway:38100
+      SAFEHARNESS_SMOKE_POSTGRES_FAILURE_GATEWAY_URL: http://postgres-failure-gateway:38100
+      SAFEHARNESS_TOOL_GATEWAY_API_KEY: ${SAFEHARNESS_GATEWAY_API_KEY:?set in config/deployment.env}
+      SAFEHARNESS_TOOL_GATEWAY_SIGNING_KEY: ${SAFEHARNESS_GATEWAY_SIGNING_KEY:?set in config/deployment.env}
+      SAFEHARNESS_ENFORCEMENT_RECEIPT_SIGNING_KEY: ${SAFEHARNESS_ENFORCEMENT_RECEIPT_SIGNING_KEY:?set in config/deployment.env}
+    command: ["python", "-m", "deploy.smoke.dependency_failure"]
+    depends_on:
+      redis-failure-gateway:
+        condition: service_started
+      postgres-failure-gateway:
+        condition: service_started
+    restart: "no"
+    networks: [backend]
+    profiles: [failure-test]
+
+  postgres-backup:
+    build:
+      context: ../..
+      dockerfile: deploy/postgres/backup.Dockerfile
+    environment:
+      SAFEHARNESS_TOOL_GATEWAY_POSTGRES_DSN: postgresql://safeharness_reader:${SAFEHARNESS_POSTGRES_READER_PASSWORD:?set in config/deployment.env}@postgres:5432/safeharness
+      SAFEHARNESS_BACKUP_DIR: /backups
+      SAFEHARNESS_BACKUP_RETENTION_DAYS: 30
+    volumes:
+      - postgres-backups:/backups
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    networks: [backend]
+    profiles: [backup]
+
+  postgres-restore-check:
+    build:
+      context: ../..
+      dockerfile: deploy/postgres/restore-check.Dockerfile
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: ${SAFEHARNESS_POSTGRES_ADMIN_PASSWORD:?set in config/deployment.env}
+      PGDATABASE: safeharness
+      SAFEHARNESS_BACKUP_DIR: /backups
+    volumes:
+      - postgres-backups:/backups:ro
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    networks: [backend]
+    profiles: [restore]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.128.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ../observability/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    restart: unless-stopped
+    networks: [backend, observability]
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=15d"]
+    volumes:
+      - ../observability/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - ../observability/alerts.yaml:/etc/prometheus/alerts.yaml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:39090:9090"
+    depends_on: [otel-collector]
+    restart: unless-stopped
+    networks: [observability, management]
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set in config/deployment.env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:33000:3000"
+    depends_on: [prometheus]
+    restart: unless-stopped
+    networks: [observability, management]
+
+networks:
+  edge:
+  backend:
+    internal: true
+  observability:
+    internal: true
+  management:
+
+volumes:
+  postgres-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+  postgres-backups:
+  receipt-private:
+  receipt-public:
+  communication-data:
+  communication-maintenance-state:

@@ -1,8 +1,8 @@
-# SafeHarness Experiment Configuration
+# Upear Experiment Configuration
 # All tuneable parameters are defined here — nothing is hardcoded.
 
 project:
-  name: "SafeHarness"
+  name: "Upear"
   output_dir: "output"
 
 data:
@@ -16,15 +16,12 @@ data:
   experiment_subset_size: 200
 
 models:
-  # Agent and Judge models MUST be different to avoid self-evaluation bias.
-  # Short names must match MODEL_FUNC_MAP in llm_api.py (or use raw gateway model ids if enabled).
+  # Set SAFEHARNESS_LLM_MODEL and SAFEHARNESS_JUDGE_MODEL in .env. Use ``env``
+  # and ``judge`` here to select them. Legacy aliases and raw model IDs remain
+  # supported; configure a distinct judge model when avoiding self-evaluation.
   agent_models:
-    # - "sonnet4.6"
-    # - "gpt5.4"
-    - "deepseek_chat"
-    # - "deepseek_reasoner"
-    # - "claude3haiku"
-  judge_model: "gpt4omini" # "gpt4o" is also supported
+    - "env"
+  judge_model: "judge"
 
 
 harness:

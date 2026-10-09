@@ -2,9 +2,39 @@ __pycache__/
 *.py[cod]
 .DS_Store
 output/
-.env
+config/*.env
+!config/*.env.example
 *.egg-info/
 dist/
 build/
 .venv/
 venv/
+.uv-cache/
+.pytest_cache/
+.ruff_cache/
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3-shm
+*.sqlite3-wal
+
+# 嵌套独立仓：平台后端单独托管（HugAgentOS）
+SUMC/
+
+# 前端依赖与构建产物（任意层级）
+node_modules/
+dist-ssr/
+*.local
+
+# 本地一次性脚本、扫描产物与工作日志（含密钥/攻击数据，禁止入库）
+tmp/
+refine-logs/
+.reasonix/
+reasonix.toml
+
+# 本地大文件
+/2604.13630.pdf
+/图片1.png
+*.log
+figures/*.tiff

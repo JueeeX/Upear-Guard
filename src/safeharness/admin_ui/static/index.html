@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>SafeHarness 管理控制台</title>
+    <link rel="stylesheet" href="/static/app.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="主导航">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">S</span>
+          <span>
+            <strong>SafeHarness</strong>
+            <small>安全管理控制台</small>
+          </span>
+        </div>
+        <nav class="navigation">
+          <button class="nav-item is-active" type="button" data-page="overview">总览</button>
+          <button class="nav-item" type="button" data-page="agents">Agent</button>
+          <button class="nav-item" type="button" data-page="topology">通信拓扑</button>
+          <button class="nav-item" type="button" data-page="delegations">授权委派</button>
+          <button class="nav-item" type="button" data-page="audit">审计</button>
+        </nav>
+        <div class="sidebar-note">
+          <span class="note-dot" aria-hidden="true"></span>
+          <span>管理密钥仅保留在本地代理</span>
+        </div>
+      </aside>
+
+      <div class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">CONTROL PLANE</p>
+            <h1 id="page-title">安全运行总览</h1>
+          </div>
+          <div class="topbar-actions">
+            <span id="connection-status" class="connection-status is-idle">未连接</span>
+            <button id="connect-button" class="button button-secondary" type="button">连接设置</button>
+            <button id="refresh-button" class="button button-primary" type="button">刷新状态</button>
+          </div>
+        </header>
+
+        <main>
+          <p id="notice" class="notice" role="status" aria-live="polite"></p>
+
+          <section id="page-overview" class="page">
+            <div class="intro-card">
+              <div>
+                <p class="eyebrow">SAFEHARNESS</p>
+                <h2>可验证的 Agent 安全控制面</h2>
+        <p>查看已注册 Agent、默认拒绝通信拓扑和委派状态。受控写操作仅在 SUMC Console 开放。</p>
+              </div>
+              <div class="state-meta">
+                <span>状态版本</span>
+                <strong id="state-version">—</strong>
+              </div>
+            </div>
+
+            <div class="metrics-grid" aria-label="控制面统计">
+              <article class="metric-card">
+                <span>已注册 Agent</span>
+                <strong id="metric-agents">—</strong>
+                <small>来自已签名协调快照</small>
+              </article>
+              <article class="metric-card">
+                <span>活动 Agent</span>
+                <strong id="metric-active">—</strong>
+                <small>不含已隔离项</small>
+              </article>
+              <article class="metric-card">
+                <span>隔离中</span>
+                <strong id="metric-quarantined">—</strong>
+                <small>发送与投递均会拒绝</small>
+              </article>
+              <article class="metric-card">
+                <span>允许通信关系</span>
+                <strong id="metric-topology">—</strong>
+                <small>默认拒绝，显式放行</small>
+              </article>
+            </div>
+
+            <div class="content-grid">
+              <article class="panel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">RECENT STATE</p>
+                    <h3>协调状态</h3>
+                  </div>
+                </div>
+                <dl id="state-details" class="definition-list">
+                  <div><dt>更新时间</dt><dd>—</dd></div>
+                  <div><dt>最近操作</dt><dd>—</dd></div>
+                  <div><dt>执行主体</dt><dd>—</dd></div>
+                  <div><dt>签名指纹</dt><dd>—</dd></div>
+                </dl>
+              </article>
+
+              <article class="panel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">SAFETY BOUNDARY</p>
+                    <h3>当前界面范围</h3>
+                  </div>
+                </div>
+                <ul class="boundary-list">
+                  <li>控制面快照、Agent、拓扑与委派均来自真实管理 API。</li>
+                  <li>仅代理隔离与恢复，不开放通用转发或浏览器侧管理密钥。</li>
+                  <li>审计页只读取已配置的 SafeHarness SQLite 审计库。</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section id="page-agents" class="page" hidden>
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">IDENTITY</p>
+                <h2>Agent 清单</h2>
+              </div>
+              <p>身份和状态来自协调控制面；隔离会立即阻断消息收发。</p>
+            </div>
+            <div class="panel table-panel">
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr><th>租户</th><th>Agent</th><th>角色</th><th>状态</th><th>可委派能力</th><th>操作</th></tr>
+                  </thead>
+                  <tbody id="agents-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section id="page-topology" class="page" hidden>
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">DEFAULT DENY</p>
+                <h2>通信拓扑</h2>
+              </div>
+              <p>仅列出控制面明确允许的 Agent 间消息路径。</p>
+            </div>
+            <div id="topology-list" class="topology-list"></div>
+          </section>
+
+          <section id="page-delegations" class="page" hidden>
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">BOUNDED AUTHORITY</p>
+                <h2>授权委派</h2>
+              </div>
+              <p>每条授权包含能力、有效期和最大消息数限制。</p>
+            </div>
+            <div class="panel table-panel">
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr><th>租户</th><th>授权方</th><th>接收方</th><th>能力</th><th>有效期</th><th>上限</th></tr>
+                  </thead>
+                  <tbody id="delegations-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section id="page-audit" class="page" hidden>
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">READ ONLY</p>
+                <h2>审计记录</h2>
+              </div>
+              <p>只显示已脱敏的本地 SQLite 审计记录。</p>
+            </div>
+            <form id="audit-filter" class="filter-bar">
+              <label>租户<input name="tenant_id" autocomplete="off" placeholder="例如 fiberhome"></label>
+              <label>来源<select name="source"><option value="">全部</option><option value="agent">Agent</option><option value="gateway">Gateway</option></select></label>
+              <label>动作<input name="action" autocomplete="off" placeholder="例如 message_send"></label>
+              <button class="button button-primary" type="submit">查询</button>
+            </form>
+            <div class="panel table-panel">
+              <div id="audit-empty" class="empty-state">连接后可查询已配置的审计源。</div>
+              <div class="table-scroll">
+                <table id="audit-table" hidden>
+                  <thead>
+                    <tr><th>时间</th><th>来源</th><th>动作</th><th>结果</th><th>租户</th><th>Agent</th><th>原因</th></tr>
+                  </thead>
+                  <tbody id="audit-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <dialog id="access-dialog" class="dialog">
+      <form id="access-form" method="dialog">
+        <p class="eyebrow">SESSION ACCESS</p>
+        <h2>连接管理控制面</h2>
+        <p>输入本次浏览器会话的访问令牌。令牌仅保存在当前标签页，不会显示或保存管理密钥。</p>
+        <label class="dialog-label">访问令牌<input id="access-token" type="password" autocomplete="off" required></label>
+        <div class="dialog-actions">
+          <button id="cancel-access" class="button button-secondary" type="button">取消</button>
+          <button class="button button-primary" type="submit">连接</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

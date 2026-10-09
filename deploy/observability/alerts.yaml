@@ -1,0 +1,114 @@
+groups:
+  - name: safeharness-gateway
+    rules:
+      - alert: SafeHarnessGatewayNoTelemetry
+        expr: absent(safeharness_gateway_http_requests_total)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: SafeHarness gateway telemetry is absent
+          description: No sanitized gateway request metric has been observed for five minutes.
+
+      - alert: SafeHarnessGatewayServerErrors
+        expr: >-
+          sum(rate(safeharness_gateway_http_requests_total{http_response_status_code=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(safeharness_gateway_http_requests_total[5m])), 0.001)
+          > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: SafeHarness gateway 5xx rate is high
+          description: More than five percent of gateway requests returned 5xx for ten minutes.
+
+      - alert: SafeHarnessReplayBackendUnavailable
+        expr: >-
+          sum(rate(safeharness_gateway_http_requests_total{error_type="capability_replay_store_unavailable"}[5m]))
+          > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: SafeHarness replay protection is unavailable
+          description: The gateway failed closed because distributed replay protection was unavailable.
+
+      - alert: SafeHarnessAuditBackendUnavailable
+        expr: >-
+          sum(rate(safeharness_gateway_http_requests_total{error_type=~"gateway_audit_unavailable|gateway_audit_commit_failed"}[5m]))
+          > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: SafeHarness audit persistence is unavailable
+          description: The gateway could not durably persist a required audit record.
+
+      - alert: SafeHarnessReceiptReplayBackendUnavailable
+        expr: >-
+          sum(rate(safeharness_gateway_http_requests_total{error_type="enforcement_receipt_store_unavailable"}[5m]))
+          > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: SafeHarness receipt replay protection is unavailable
+          description: The gateway failed closed because receipt replay protection was unavailable.
+
+      - alert: SafeHarnessReceiptValidationFailures
+        expr: >-
+          sum(rate(safeharness_gateway_http_requests_total{error_type=~"enforcement_receipt_invalid|enforcement_receipt_expired|enforcement_receipt_identity_mismatch|enforcement_receipt_replayed"}[5m]))
+          > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: SafeHarness enforcement receipt validation failures detected
+          description: One or more tool requests presented invalid, expired, mismatched, or replayed policy proofs.
+
+  - name: safeharness-communication-gateway
+    rules:
+      - alert: SafeHarnessCommunicationNoTelemetry
+        expr: absent(safeharness_communication_gateway_http_requests_total)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: SafeHarness communication telemetry is absent
+          description: No sanitized communication gateway request metric has been observed for five minutes.
+
+      - alert: SafeHarnessCommunicationServerErrors
+        expr: >-
+          sum(rate(safeharness_communication_gateway_http_requests_total{http_response_status_code=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(safeharness_communication_gateway_http_requests_total[5m])), 0.001)
+          > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: SafeHarness communication gateway 5xx rate is high
+          description: More than five percent of communication requests returned 5xx for ten minutes.
+
+      - alert: SafeHarnessCommunicationRateLimiterUnavailable
+        expr: >-
+          sum(rate(safeharness_communication_gateway_http_requests_total{error_type="communication_rate_limit_unavailable"}[5m]))
+          > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: SafeHarness communication rate limiter is unavailable
+          description: The communication gateway failed closed because distributed rate limiting was unavailable.
+
+      - alert: SafeHarnessCommunicationRateLimited
+        expr: >-
+          sum(rate(safeharness_communication_gateway_http_requests_total{error_type="communication_rate_limit_exceeded"}[5m]))
+          > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: SafeHarness communication request throttling is sustained
+          description: Authenticated Agents are being rate limited at more than one request per second.
