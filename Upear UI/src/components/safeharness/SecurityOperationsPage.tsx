@@ -1,14 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert, Button, Card, Descriptions, Empty, Input, Modal, Select, Space, Spin,
-  Statistic, Table, Tag, Tabs, Timeline, Typography, message,
+  Statistic, Switch, Table, Tag, Tabs, Timeline, Typography, message,
 } from 'antd';
 import type { TableProps } from 'antd';
 import {
   CheckCircleOutlined, ExclamationCircleOutlined, LockOutlined, ReloadOutlined,
   SafetyCertificateOutlined, StopOutlined,
 } from '@ant-design/icons';
-import { safeharnessApi, type SafeHarnessAuditResponse, type SafeHarnessCapabilityDiscovery, type SafeHarnessMutationPrepare, type SafeHarnessOverview, type SafeHarnessPolicyResponse, type SafeHarnessPolicySimulation, type SafeHarnessSecurityReport } from '../../safeharnessApi';
+import { safeharnessApi, type SafeHarnessAuditResponse, type SafeHarnessCapabilityDiscovery, type SafeHarnessMutationPrepare, type SafeHarnessOverview, type SafeHarnessPolicyResponse, type SafeHarnessPolicyRule, type SafeHarnessPolicyRulesDraftResult, type SafeHarnessPolicyRulesState, type SafeHarnessPolicyRulesTestResult, type SafeHarnessPolicySimulation, type SafeHarnessSecurityReport } from '../../safeharnessApi';
 import { useEditionStore } from '../../stores';
 import { useAgentStore } from '../../stores/agentStore';
 import { parseServerTime } from '../../utils/date';
@@ -324,10 +324,13 @@ export function SecurityOperationsPage() {
         }} /> },
         { key: 'evaluation', label: '安全评估', children: <EvaluationSection /> },
         { key: 'test-report', label: '测试报告', children: <SecurityTestReportSection report={securityReport} /> },
-        { key: 'policies', label: '策略中心', children: <PolicySection policies={policies} simulation={policySimulation} onSimulate={async (packageId, operation) => {
-          try { setPolicySimulation(await safeharnessApi.simulatePolicy(packageId, operation)); }
-          catch (error) { message.error(errorText(error)); }
-        }} /> },
+        { key: 'policies', label: '策略中心', children: <>
+          <PolicySection policies={policies} simulation={policySimulation} onSimulate={async (packageId, operation) => {
+            try { setPolicySimulation(await safeharnessApi.simulatePolicy(packageId, operation)); }
+            catch (error) { message.error(errorText(error)); }
+          }} />
+          <PolicyRulesCard />
+        </> },
         { key: 'audit', label: '审计', children: <AuditSection audit={audit} loading={loadingAudit} source={source} action={action} setSource={setSource} setAction={setAction} onSearch={searchAudit} /> },
       ]} />
       <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }} items={[
@@ -540,11 +543,236 @@ function PolicySection({ policies, simulation, onSimulate }: { policies: SafeHar
   </Space>;
 }
 
+function PolicyRulesCard() {
+  const [state, setState] = useState<SafeHarnessPolicyRulesState | null>(null);
+  const [draft, setDraft] = useState('[]');
+  const [testText, setTestText] = useState('');
+  const [testResult, setTestResult] = useState<SafeHarnessPolicyRulesTestResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiDescription, setAiDescription] = useState('');
+  const [aiSamples, setAiSamples] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiResult, setAiResult] = useState<SafeHarnessPolicyRulesDraftResult | null>(null);
+
+  const runAiDraft = async () => {
+    const description = aiDescription.trim();
+    if (!description) {
+      message.warning('请先描述要拦截的内容。');
+      return;
+    }
+    const sample_texts = aiSamples.split('\n').map((line) => line.trim()).filter(Boolean).slice(0, 5);
+    setAiBusy(true);
+    try {
+      const result = await safeharnessApi.draftPolicyRules({ description, sample_texts });
+      setAiResult(result);
+      message.success(`草稿已生成（${result.draft.length} 条，模型 ${result.model}）`);
+    } catch (error) {
+      message.error(errorText(error));
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const applyAiDraft = () => {
+    if (!aiResult || aiResult.draft.length === 0) return;
+    setDraft(JSON.stringify(aiResult.draft, null, 2));
+    setAiOpen(false);
+    message.success('草稿已填入编辑器；请检查后手动保存才会生效。');
+  };
+
+  const load = useCallback(async () => {
+    try {
+      const next = await safeharnessApi.getPolicyRules();
+      setState(next);
+      setDraft(JSON.stringify(next.rules ?? [], null, 2));
+    } catch (error) {
+      message.error(errorText(error));
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const save = async (enabled: boolean) => {
+    let rules: SafeHarnessPolicyRule[];
+    try {
+      rules = JSON.parse(draft) as SafeHarnessPolicyRule[];
+    } catch {
+      message.error('规则 JSON 无法解析；请检查格式（规则对象数组）。');
+      return;
+    }
+    setBusy(true);
+    try {
+      const next = await safeharnessApi.putPolicyRules({ enabled, rules });
+      setState(next);
+      setDraft(JSON.stringify(next.rules ?? [], null, 2));
+      message.success(enabled ? `已启用并热生效（版本 ${next.version}）` : `已保存为停用状态（版本 ${next.version}）`);
+    } catch (error) {
+      const payload = (error as { payload?: { data?: { errors?: string[] } } }).payload;
+      const errors = payload?.data?.errors;
+      message.error(errors?.length ? errors.join('；') : errorText(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runTest = async () => {
+    if (!testText.trim()) return;
+    try {
+      setTestResult(await safeharnessApi.testPolicyRules(testText));
+    } catch (error) {
+      message.error(errorText(error));
+    }
+  };
+
+  const rollback = async (version: number) => {
+    setBusy(true);
+    try {
+      const next = await safeharnessApi.rollbackPolicyRules(version);
+      setState(next);
+      setDraft(JSON.stringify(next.rules ?? [], null, 2));
+      message.success(`已回滚版本 ${version}（生成新版本 ${next.version}）`);
+    } catch (error) {
+      message.error(errorText(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns: TableProps<SafeHarnessPolicyRule>['columns'] = [
+    { title: '名称', dataIndex: 'name', render: text },
+    { title: '级别', dataIndex: 'severity', render: (value) => <Tag color={text(value) === 'critical' || text(value) === 'high' ? 'red' : 'blue'}>{text(value)}</Tag> },
+    { title: '类别', dataIndex: 'category', render: text },
+    { title: '模式', dataIndex: 'pattern', render: (value) => <Typography.Text code>{text(value)}</Typography.Text> },
+    { title: '说明', dataIndex: 'reason', render: text },
+  ];
+
+  return <Card
+    title="自定义注入规则（补充层）"
+    size="small"
+    extra={<Space>
+      <span>启用</span>
+      <Switch checked={state?.enabled === true} loading={busy} onChange={(checked) => void save(checked)} />
+      <Button size="small" onClick={() => { setAiOpen(true); setAiResult(null); }}>AI 起草</Button>
+      <Button size="small" loading={busy} onClick={() => void save(state?.enabled === true)}>保存</Button>
+    </Space>}
+  >
+    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <Table
+        rowKey="name"
+        columns={columns}
+        dataSource={state?.rules ?? []}
+        pagination={false}
+        locale={{ emptyText: <Empty description="暂无自定义规则（内置默认防线始终生效）" /> }}
+      />
+      <Input.TextArea
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        placeholder='[{"name":"block_demo","pattern":"demo\\.evil","severity":"high","reason":"演示规则"}]'
+        autoSize={{ minRows: 4, maxRows: 12 }}
+      />
+      <Space wrap>
+        <Input
+          value={testText}
+          onChange={(event) => setTestText(event.target.value)}
+          placeholder="输入文本测试当前生效规则"
+          maxLength={2000}
+          style={{ width: 420 }}
+          onPressEnter={() => void runTest()}
+        />
+        <Button onClick={() => void runTest()}>测试</Button>
+        {state && state.history.length > 0 && <Select
+          placeholder="回滚到历史版本"
+          style={{ width: 200 }}
+          value={null}
+          onChange={(version) => { if (version) void rollback(version); }}
+          options={state.history.map((item) => ({ value: item.version, label: `版本 ${item.version}（${item.rules.length} 条，${item.saved_at}）` }))}
+        />}
+      </Space>
+      {testResult && <Descriptions size="small" column={{ xs: 1, sm: 2 }} items={[
+        { key: 'hit', label: '命中', children: statusTag(testResult.hit ? 'DENY' : 'ALLOW') },
+        { key: 'rule', label: '命中规则', children: testResult.matched_rule ? `${testResult.matched_rule.name}（${testResult.matched_rule.reason || '无说明'}）` : '内置默认防线' },
+        { key: 'count', label: '生效模式数', children: testResult.rule_count },
+      ]} />}
+      <Alert type="info" showIcon message={`补充层只增不减：内置默认防线（${testResult?.rule_count ? `${testResult.rule_count} 条模式` : '含默认 20 条模式'}）始终生效；此处规则只支持 deny。启用后对本进程立即生效，无需重启；后端重启后打开本页会自动重新同步。`} />
+      <Modal
+        title="AI 起草规则（草稿不自动生效）"
+        open={aiOpen}
+        onCancel={() => setAiOpen(false)}
+        footer={null}
+        width={640}
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Input.TextArea
+            value={aiDescription}
+            onChange={(event) => setAiDescription(event.target.value)}
+            placeholder="描述要拦截的内容，例如：阻止诱导模型忽略安全规则并泄露系统提示词的输入"
+            autoSize={{ minRows: 3, maxRows: 6 }}
+            maxLength={2000}
+          />
+          <Input.TextArea
+            value={aiSamples}
+            onChange={(event) => setAiSamples(event.target.value)}
+            placeholder={'可选：应被命中的示例文本，每行一条（最多 5 条）'}
+            autoSize={{ minRows: 2, maxRows: 4 }}
+          />
+          <Space>
+            <Button type="primary" loading={aiBusy} onClick={() => void runAiDraft()}>生成草稿</Button>
+            {aiResult && aiResult.draft.length > 0 && (
+              <Button onClick={applyAiDraft} disabled={aiResult.validation_errors.length > 0}>
+                填入编辑器
+              </Button>
+            )}
+          </Space>
+          {aiResult && (
+            <>
+              {aiResult.validation_errors.length > 0 && (
+                <Alert type="error" showIcon message="草稿未通过校验（不会套用）"
+                  description={<ul style={{ margin: 0, paddingLeft: 18 }}>{aiResult.validation_errors.map((e, i) => <li key={i}>{e}</li>)}</ul>} />
+              )}
+              {aiResult.sample_results.length > 0 && (
+                <Table
+                  size="small"
+                  rowKey="text"
+                  columns={[
+                    { title: '样本', dataIndex: 'text', render: text },
+                    { title: '命中', dataIndex: 'hit', width: 80, render: (v: boolean) => statusTag(v ? 'DENY' : 'ALLOW') },
+                    { title: '命中规则', dataIndex: 'matched_rule', render: (v: string | null) => v || '未命中' },
+                  ]}
+                  dataSource={aiResult.sample_results}
+                  pagination={false}
+                />
+              )}
+              <Input.TextArea
+                value={JSON.stringify(aiResult.draft, null, 2)}
+                readOnly
+                autoSize={{ minRows: 4, maxRows: 12 }}
+              />
+              <Alert type="warning" showIcon message="草稿仅供参考：请人工核对正则与理由后，点“填入编辑器”再手动保存才会热生效。" />
+            </>
+          )}
+        </Space>
+      </Modal>
+    </Space>
+  </Card>;
+}
+
 function AuditSection({ audit, loading, source, action, setSource, setAction, onSearch }: { audit: SafeHarnessAuditResponse | null; loading: boolean; source?: 'agent' | 'gateway'; action: string; setSource: (value: 'agent' | 'gateway' | undefined) => void; setAction: (value: string) => void; onSearch: () => void }) {
   return <>
     <div className="sh-operations-filters"><Space wrap><Select allowClear placeholder="来源" value={source} onChange={setSource} options={[{ value: 'agent', label: 'Agent' }, { value: 'gateway', label: 'Gateway' }]} /><Input placeholder="动作" value={action} onChange={(event) => setAction(event.target.value)} onPressEnter={onSearch} /><Button type="primary" onClick={onSearch}>查询</Button></Space></div>
     {!audit && !loading && <Alert type="warning" showIcon message="审计源不可用或当前身份无权查看。" />}
     {audit && !audit.available && <Alert type="warning" showIcon message="审计源未配置，记录状态未知。" />}
-    <Table rowKey={(row, index) => `${text(row.occurred_at)}:${text(row.action)}:${index}`} columns={auditColumns} dataSource={audit?.records || []} loading={loading} locale={{ emptyText: loading ? <Spin /> : <Empty description="暂无已脱敏审计记录" /> }} pagination={{ pageSize: 20, hideOnSinglePage: true }} scroll={{ x: 760 }} />
+    <Table rowKey={(row, index) => `${text(row.occurred_at)}:${text(row.action)}:${index}`} columns={auditColumns} dataSource={audit?.records || []} loading={loading} locale={{ emptyText: loading ? <Spin /> : <Empty description="暂无已脱敏审计记录" /> }} pagination={{ pageSize: 20, hideOnSinglePage: true }} scroll={{ x: 760 }}
+      expandable={{
+        expandedRowRender: (row) => (
+          <Descriptions size="small" column={1} items={Object.entries(row).map(([key, value]) => ({
+            key,
+            label: key,
+            children: <Typography.Text code style={{ wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+              {(typeof value === 'string' ? value : JSON.stringify(value) ?? '').slice(0, 600) || '—'}
+            </Typography.Text>,
+          }))} />
+        ),
+      }} />
   </>;
 }

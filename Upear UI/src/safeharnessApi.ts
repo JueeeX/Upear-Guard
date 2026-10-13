@@ -91,6 +91,53 @@ export interface SafeHarnessPolicySimulation {
   impact: Record<string, unknown>;
 }
 
+export interface SafeHarnessPolicyRule {
+  name: string;
+  pattern: string;
+  severity?: string;
+  category?: string;
+  reason?: string;
+  action?: string;
+}
+
+export interface SafeHarnessPolicyRulesState {
+  enabled: boolean;
+  version: number;
+  rules: SafeHarnessPolicyRule[];
+  history: Array<{
+    version: number;
+    rules: SafeHarnessPolicyRule[];
+    enabled: boolean;
+    saved_at: string;
+    saved_by: string;
+  }>;
+  updated_at: string;
+  updated_by: string;
+  effective: { runtime_rule_count: number; runtime_rules: string[] };
+}
+
+export interface SafeHarnessPolicyRulesTestResult {
+  hit: boolean;
+  changed: boolean;
+  cleaned: string;
+  matched_rule: {
+    name: string;
+    severity: string;
+    category: string;
+    reason: string;
+    source: string;
+  } | null;
+  rule_count: number;
+}
+
+export interface SafeHarnessPolicyRulesDraftResult {
+  draft: SafeHarnessPolicyRule[];
+  validation_errors: string[];
+  sample_results: Array<{ text: string; hit: boolean; matched_rule: string | null }>;
+  model: string;
+  notice: string;
+}
+
 export interface SafeHarnessSecurityReport {
   schema_version: '1.0';
   generated_at: string;
@@ -170,6 +217,7 @@ const ROUTES = Object.freeze({
   audit: '/v1/safeharness/audit',
   mutations: '/v1/safeharness/mutations',
   policies: '/v1/safeharness/policies',
+  policyRules: '/v1/safeharness/policy-rules',
   protectedChatStream: '/v1/safeharness/chat/stream',
   securityReport: '/v1/safeharness/security-report',
   testScenarios: '/v1/safeharness/test-scenarios',
@@ -339,6 +387,27 @@ export const safeharnessApi = {
     return request<SafeHarnessAuditResponse>(`${ROUTES.audit}?${params.toString()}`, { signal });
   },
   getPolicies: (signal?: AbortSignal) => request<SafeHarnessPolicyResponse>(ROUTES.policies, { signal }),
+  getPolicyRules: (signal?: AbortSignal) => request<SafeHarnessPolicyRulesState>(ROUTES.policyRules, { signal }),
+  putPolicyRules: (body: { enabled: boolean; rules: SafeHarnessPolicyRule[] }) => request<SafeHarnessPolicyRulesState>(ROUTES.policyRules, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }),
+  testPolicyRules: (text: string) => request<SafeHarnessPolicyRulesTestResult>(`${ROUTES.policyRules}/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  }),
+  draftPolicyRules: (body: { description: string; sample_texts?: string[] }) => request<SafeHarnessPolicyRulesDraftResult>(`${ROUTES.policyRules}/draft`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }),
+  rollbackPolicyRules: (version: number) => request<SafeHarnessPolicyRulesState>(`${ROUTES.policyRules}/rollback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version }),
+  }),
   getSecurityReport: (signal?: AbortSignal) => request<SafeHarnessSecurityReport>(ROUTES.securityReport, { signal }),
   getTestScenarios: (signal?: AbortSignal) => request<{ scenarios: SafeHarnessTestScenario[] }>(ROUTES.testScenarios, { signal }),
   createTestRun: (scenarioId: string, parameters: Record<string, unknown> = {}) => request<SafeHarnessTestRun>(ROUTES.testRuns, {
