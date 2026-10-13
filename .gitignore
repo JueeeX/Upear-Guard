@@ -38,3 +38,6 @@ reasonix.toml
 /图片1.png
 *.log
 figures/*.tiff
+
+# ZCode session tooling
+.zcode/
