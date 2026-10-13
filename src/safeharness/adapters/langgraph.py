@@ -103,6 +103,7 @@ class LangGraphTool:
         idempotent: bool = True,
         compensator: str | None = None,
         sandbox_required: bool = False,
+        tags: frozenset[str] | set[str] = frozenset(),
     ) -> "LangGraphTool":
         """Build a tool from a typed callable without weakening its policy metadata.
 
@@ -179,6 +180,7 @@ class LangGraphTool:
                 idempotent=idempotent,
                 compensator=compensator,
                 sandbox_required=sandbox_required,
+                tags=frozenset(tags),
             ),
             executor=function,
             resource_resolver=resolver,

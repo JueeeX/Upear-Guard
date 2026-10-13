@@ -33,26 +33,37 @@ class ToolDescriptor:
     idempotent: bool = True
     compensator: str | None = None
     sandbox_required: bool = False
+    tags: frozenset[str] = frozenset()
     integrity_digest: str = ""
 
     def __post_init__(self) -> None:
         if not self.name:
             raise ValueError("tool name must not be empty")
         object.__setattr__(self, "input_schema", frozen_mapping(self.input_schema))
+        object.__setattr__(self, "tags", frozenset(self.tags))
+        for tag in self.tags:
+            if not isinstance(tag, str) or not tag.strip():
+                raise ValueError("tool tags must be non-empty strings")
+        canonical_fields = {
+            "name": self.name,
+            "version": self.version,
+            "description": self.description,
+            "input_schema": _strict_json_value(self.input_schema),
+            "required_capabilities": sorted(self.required_capabilities),
+            "side_effects": sorted(self.side_effects),
+            "data_classifications": sorted(self.data_classifications),
+            "reversibility": self.reversibility.value,
+            "idempotent": self.idempotent,
+            "compensator": self.compensator,
+            "sandbox_required": self.sandbox_required,
+        }
+        # Untagged descriptors keep the historic canonical form (and thus the
+        # historic digest); a non-empty tag set is security-relevant metadata
+        # and must be bound into the digest.
+        if self.tags:
+            canonical_fields["tags"] = sorted(self.tags)
         canonical = json.dumps(
-            {
-                "name": self.name,
-                "version": self.version,
-                "description": self.description,
-                "input_schema": _strict_json_value(self.input_schema),
-                "required_capabilities": sorted(self.required_capabilities),
-                "side_effects": sorted(self.side_effects),
-                "data_classifications": sorted(self.data_classifications),
-                "reversibility": self.reversibility.value,
-                "idempotent": self.idempotent,
-                "compensator": self.compensator,
-                "sandbox_required": self.sandbox_required,
-            },
+            canonical_fields,
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=True,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 import unittest
 from typing import Any
@@ -590,6 +591,70 @@ class CoreRuntimeTests(unittest.IsolatedAsyncioTestCase):
     async def test_incorrect_declared_tool_digest_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "integrity digest"):
             ToolDescriptor(name="lookup", integrity_digest="not-the-real-digest")
+
+    async def test_untagged_descriptor_keeps_historic_digest(self) -> None:
+        # Tags enter the canonical form only when non-empty, so every
+        # descriptor built before the field existed digests identically.
+        tool = descriptor()
+        canonical = json.dumps(
+            {
+                "name": tool.name,
+                "version": tool.version,
+                "description": tool.description,
+                "input_schema": json.loads(json.dumps(dict(tool.input_schema))),
+                "required_capabilities": sorted(tool.required_capabilities),
+                "side_effects": sorted(tool.side_effects),
+                "data_classifications": sorted(tool.data_classifications),
+                "reversibility": tool.reversibility.value,
+                "idempotent": tool.idempotent,
+                "compensator": tool.compensator,
+                "sandbox_required": tool.sandbox_required,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode("utf-8")
+        self.assertEqual(
+            tool.integrity_digest,
+            hashlib.sha256(canonical).hexdigest(),
+        )
+
+    async def test_tagged_descriptor_digest_binds_tags(self) -> None:
+        plain = descriptor()
+        tagged = ToolDescriptor(
+            name=plain.name,
+            input_schema={},
+            required_capabilities=plain.required_capabilities,
+            reversibility=plain.reversibility,
+            side_effects=plain.side_effects,
+            tags=frozenset({"secret"}),
+        )
+        self.assertNotEqual(plain.integrity_digest, tagged.integrity_digest)
+        # Tag order must not matter; tag content must.
+        reordered = ToolDescriptor(
+            name=plain.name,
+            input_schema={},
+            required_capabilities=plain.required_capabilities,
+            reversibility=plain.reversibility,
+            side_effects=plain.side_effects,
+            tags=frozenset({"secret"}),
+        )
+        self.assertEqual(tagged.integrity_digest, reordered.integrity_digest)
+        different = ToolDescriptor(
+            name=plain.name,
+            input_schema={},
+            required_capabilities=plain.required_capabilities,
+            reversibility=plain.reversibility,
+            side_effects=plain.side_effects,
+            tags=frozenset({"public"}),
+        )
+        self.assertNotEqual(tagged.integrity_digest, different.integrity_digest)
+
+    async def test_descriptor_rejects_invalid_tags(self) -> None:
+        with self.assertRaisesRegex(ValueError, "non-empty strings"):
+            ToolDescriptor(name="lookup", tags=frozenset({"", "ok"}))
+        with self.assertRaisesRegex(ValueError, "non-empty strings"):
+            ToolDescriptor(name="lookup", tags=frozenset({"  "}))
 
     async def test_tool_call_id_is_not_empty_when_adapter_omits_it(self) -> None:
         invocation = ToolInvocation("lookup", call_id="")
