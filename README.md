@@ -19,7 +19,7 @@ Upear SafeHarness Suite 的核心判断（源自 SafeHarness 论文并在此实�
 
 本项目包含两部分：
 
-- **Upear SafeHarness Suite 安全框架**（`src/safeharness`，独立 pip 包；fork 自 SafeHarness 论文官方实现）：与执行生命周期对齐的四层安全模型、能力令牌与强制回执、工具安全网关、审计与监督；
+- **Upear SafeHarness Suite 安全框架**（`src/safeharness`，独立 pip 包；基于 SafeHarness 论文提出的框架实现）：与执行生命周期对齐的四层安全模型、能力令牌与强制回执、工具安全网关、审计与监督；
 - **Upear 平台**：基于该框架的多智能体产品化平台——受保护对话链、FSM 多智能体规划、外部智能体桥、安全运营前端（平台后端基于 [HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS) 构建，见[致谢](#-致谢)）。
 
 ### 本项目的原创与扩展
