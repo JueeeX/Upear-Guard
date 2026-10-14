@@ -1,4 +1,4 @@
-# Upear Guard
+# Upear SafeHarness Suite
 
 > 面向 LLM 智能体的**生命周期安全框架**与**多智能体规划平台**。
 > 安全机制原生嵌入智能体执行生命周期：输入防线、能力授权、强制回执、工具网关、审计脱敏、运行监督与人工复核，配合「LLM 提案 + 确定性编译 + 人工确认」的 FSM 多智能体规划。
@@ -7,19 +7,19 @@
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![Status](https://img.shields.io/badge/Status-Engineering%20Alpha-orange)
 
-> **来源与范围**：Upear Guard 由两部分构成——① **Upear Guard 安全框架**（基于 SafeHarness 论文[官方实现](https://github.com/liu-yang-maker/SafeHarness)提出的框架，并做了生产化改造与优化，架构出处见文末[致谢](#-致谢)）；② **Upear 平台**（受保护对话链、FSM 规划、安全运营前端等工程扩展），平台后端基于 [HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS) 基座构建，我们在其上叠加了全部安全能力。本仓库自身的贡献见「[本项目的原创与扩展](#本项目的原创与扩展)」。
+> **来源与范围**：Upear SafeHarness Suite 由两部分构成——① **Upear SafeHarness Suite 安全框架**（基于 SafeHarness 论文[官方实现](https://github.com/liu-yang-maker/SafeHarness)提出的框架，并做了生产化改造与优化，架构出处见文末[致谢](#-致谢)）；② **Upear 平台**（受保护对话链、FSM 规划、安全运营前端等工程扩展），平台后端基于 [HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS) 基座构建，我们在其上叠加了全部安全能力。本仓库自身的贡献见「[本项目的原创与扩展](#本项目的原创与扩展)」。
 
 ---
 
-## 为什么是 Upear Guard
+## 为什么是 Upear SafeHarness Suite
 
 工具型智能体在**多轮推理、工具调用、环境状态与记忆读写**中完成任务，不安全行为可能出现在任何一环。把安全做成「进模型前拦一次、出模型后查一次」的外挂护栏，会漏掉工具滥用、间接注入、记忆腐蚀等关键攻击面。
 
-Upear Guard 的核心判断（源自 SafeHarness 论文并在此实现）：**可信的智能体安全应与 Harness 执行管线同构**——安全机制作为执行路径上的一等公民，在统一抽象下接入多种执行形态（ReAct、多智能体、Map-Reduce 等），使同一类防御横向可比。
+Upear SafeHarness Suite 的核心判断（源自 SafeHarness 论文并在此实现）：**可信的智能体安全应与 Harness 执行管线同构**——安全机制作为执行路径上的一等公民，在统一抽象下接入多种执行形态（ReAct、多智能体、Map-Reduce 等），使同一类防御横向可比。
 
 本项目包含两部分：
 
-- **Upear Guard 安全框架**（`src/safeharness`，独立 pip 包；fork 自 SafeHarness 论文官方实现）：与执行生命周期对齐的四层安全模型、能力令牌与强制回执、工具安全网关、审计与监督；
+- **Upear SafeHarness Suite 安全框架**（`src/safeharness`，独立 pip 包；fork 自 SafeHarness 论文官方实现）：与执行生命周期对齐的四层安全模型、能力令牌与强制回执、工具安全网关、审计与监督；
 - **Upear 平台**：基于该框架的多智能体产品化平台——受保护对话链、FSM 多智能体规划、外部智能体桥、安全运营前端（平台后端基于 [HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS) 构建，见[致谢](#-致谢)）。
 
 ### 本项目的原创与扩展
@@ -39,7 +39,7 @@ Upear Guard 的核心判断（源自 SafeHarness 论文并在此实现）：**�
 
 总体关系：
 
-![Upear 总体架构：Upear Guard 安全层 × 平台基座](figures/upear-overview-zh.svg)
+![Upear 总体架构：Upear SafeHarness Suite 安全层 × 平台基座](figures/upear-overview-zh.svg)
 
 平台分层细节见 [Upear-Backend 仓库 README](https://github.com/JueeeX/Upear-Backend)（含安全增强架构图）。
 
@@ -262,7 +262,7 @@ python test_e2e.py
 | 项目 | 本项目中的用途 |
 |---|---|
 | [SafeHarness（论文 · arXiv:2604.13630）](https://arxiv.org/abs/2604.13630) | **本框架的架构出处**：`src/safeharness` fork 自其[官方实现](https://github.com/liu-yang-maker/SafeHarness)（四层安全生命周期模型、能力令牌与强制回执、工具网关等），本项目在此之上做了生产化改造与扩展 |
-| [HugAgentOS (ZJU-REAL)](https://github.com/ZJU-REAL/HugAgentOS) | 平台后端的基座：多智能体对话、会话与编排基础设施。Upear Guard 平台侧能力（受保护对话链、外部智能体桥、审计复核等）在其上扩展构建 |
+| [HugAgentOS (ZJU-REAL)](https://github.com/ZJU-REAL/HugAgentOS) | 平台后端的基座：多智能体对话、会话与编排基础设施。Upear SafeHarness Suite 平台侧能力（受保护对话链、外部智能体桥、审计复核等）在其上扩展构建 |
 | [LangGraph](https://github.com/langchain-ai/langgraph) | 智能体执行框架与受保护图适配（`safeharness/adapters`、`examples/langgraph_noc`） |
 | [mem0](https://github.com/mem0ai/mem0) | 外部智能体长期记忆读写 |
 | [AutoGen](https://github.com/microsoft/autogen) / [OpenAI Agents SDK](https://github.com/openai/openai-agents-python) / [smolagents](https://github.com/huggingface/smolagents) | 外部智能体桥接的三种执行框架 |
