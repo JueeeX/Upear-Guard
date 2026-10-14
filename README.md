@@ -3,13 +3,11 @@
 > 面向 LLM 智能体的**生命周期安全框架**与**多智能体规划平台**。
 > 安全机制原生嵌入智能体执行生命周期：输入防线、能力授权、强制回执、工具网关、审计脱敏、运行监督与人工复核，配合「LLM 提案 + 确定性编译 + 人工确认」的 FSM 多智能体规划。
 
-[![arXiv](https://img.shields.io/badge/arXiv-2604.13630-b31b1b.svg)](https://arxiv.org/abs/2604.13630)
-![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![Status](https://img.shields.io/badge/Status-Engineering%20Alpha-orange)
 
-**SafeHarness: Lifecycle-Integrated Security Architecture for LLM-based Agent Deployment**
-Xixun Lin\*, Yang Liu\*, Yancheng Chen\*, Yongxuan Wu, Yucheng Ning, Yilong Liu, Nan Sun, Shun Zhang, Bin Chong, Chuan Zhou, Yanan Cao, Li Guo (\* Equal contribution)
+> **来源与范围**：Upear 由两部分构成——① **SafeHarness 安全框架**（`src/safeharness`，本仓库原创实现，理论模型源自文末[引用](#引用)中的 SafeHarness 论文）；② **Upear 平台**（受保护对话链、FSM 规划、安全运营前端等工程扩展），平台后端基于 [HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS) 基座构建，我们在其上叠加了全部安全能力。详见下文「[本项目的原创与扩展](#本项目的原创与扩展)」与文末[致谢](#-致谢)。
 
 ---
 
@@ -23,6 +21,44 @@ SafeHarness 的核心判断：**可信的智能体安全应与 Harness 执行管
 
 - **SafeHarness 安全框架**（`src/safeharness`，独立 pip 包）：与执行生命周期对齐的四层安全模型、能力令牌与强制回执、工具安全网关、审计与监督；
 - **Upear 平台**：基于该框架的多智能体产品化平台——受保护对话链、FSM 多智能体规划、外部智能体桥、安全运营前端（平台后端基于 [HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS) 构建，见[致谢](#-致谢)）。
+
+### 本项目的原创与扩展
+
+平台基座（对话、会话、编排基础设施）来自 HugAgentOS；**以下安全能力为本项目原创设计与实现**：
+
+| 能力 | 说明 |
+|---|---|
+| 受保护对话链 | 结构防线（毫秒级、零模型调用）→ 语义 Judge（fail-closed）→ 分流，全程审计落账 |
+| Tool Security Gateway | capability 签发/原子消费 + 强制回执（HMAC 会签）+ 网关侧独立审计账本 |
+| 策略中心 | 补充注入规则层：文件 + 运行时双通道热生效、链式规则（支持工具标签）、版本回滚、人工闸门 |
+| AI 辅助规则起草 | LLM 起草 → 服务端确定性校验 → 样本自测 → 人工确认（草稿绝不自动生效） |
+| MCP 通道守卫 | 全部 MCP 工具的描述注入扫描 + 策略评估中间件（env 门控默认关） |
+| 轨迹链与工具标签 | 跨工具链式规则（名称正则/描述符标签）、被拒重试压力、熵载荷检测 |
+| 运行监督 | 步数/循环/输出/预算四类触发 + 重试压力第五触发 → 语义复核 → 人工复核队列 |
+| FSM 规划安全守卫 | 规划输入逐条语义验证；LLM 只提案，执行权在确定性编译的代码 |
+
+总体关系：
+
+```mermaid
+flowchart TB
+    subgraph SH["SafeHarness 安全层 —— 本项目核心（原创）"]
+        INFORM["输入防线<br/>正则 + 语义 Judge"]
+        CONSTRAIN["能力门<br/>签名令牌 + 特权分离"]
+        GW["工具网关<br/>强制回执 + 原子消费"]
+        SUP["运行监督<br/>+ 人工复核队列"]
+        PC["策略中心<br/>热规则 · AI 起草 · 回滚"]
+        MCPG["MCP 守卫<br/>描述扫描 + 策略中间件"]
+    end
+    subgraph BASE["平台基座 —— HugAgentOS + 本项目平台扩展"]
+        CHAT["受保护对话链"]
+        FSM["FSM 规划模式"]
+        BRIDGE["外部智能体桥<br/>AutoGen / OpenAI Agents / smolagents"]
+        UI["安全运营前端<br/>策略中心 · 复核工作台"]
+    end
+    SH -- "强制管控：消息 / 工具 / 记忆 / 审计" --> BASE
+```
+
+平台分层细节见 [Upear-Backend 仓库 README](https://github.com/JueeeX/Upear-Backend)（含安全增强架构图）。
 
 ---
 
