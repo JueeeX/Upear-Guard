@@ -28,7 +28,7 @@
   <!-- SafeHarness layer -->
   <rect x="30" y="60" width="940" height="780" class="sec-bg"/>
   <text x="62" y="130" class="sec-title">SafeHarness 安全层</text>
-  <text x="520" y="130" class="sec-tag">本项目核心（原创）</text>
+  <text x="520" y="130" class="sec-tag">fork 自 SafeHarness 官方实现 · 本项目生产化扩展</text>
 
   <rect x="62" y="165" width="420" height="130" class="sec-box"/>
   <text x="88" y="212" class="sec-box-t">输入防线</text>
