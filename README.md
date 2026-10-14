@@ -7,7 +7,7 @@
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![Status](https://img.shields.io/badge/Status-Engineering%20Alpha-orange)
 
-> **来源与范围**：Upear Guard 由两部分构成——① **Upear Guard 安全框架**（`基于 SafeHarness 论文[官方实现](https://github.com/liu-yang-maker/SafeHarness)提出的框架，并做了生产化改造与优化，架构出处见文末[致谢](#-致谢)）；② **Upear 平台**（受保护对话链、FSM 规划、安全运营前端等工程扩展），平台后端基于 [HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS) 基座构建，我们在其上叠加了全部安全能力。本仓库自身的贡献见「[本项目的原创与扩展](#本项目的原创与扩展)」。
+> **来源与范围**：Upear Guard 由两部分构成——① **Upear Guard 安全框架**（基于 SafeHarness 论文[官方实现](https://github.com/liu-yang-maker/SafeHarness)提出的框架，并做了生产化改造与优化，架构出处见文末[致谢](#-致谢)）；② **Upear 平台**（受保护对话链、FSM 规划、安全运营前端等工程扩展），平台后端基于 [HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS) 基座构建，我们在其上叠加了全部安全能力。本仓库自身的贡献见「[本项目的原创与扩展](#本项目的原创与扩展)」。
 
 ---
 
