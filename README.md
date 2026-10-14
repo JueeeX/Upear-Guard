@@ -39,24 +39,7 @@ SafeHarness 的核心判断：**可信的智能体安全应与 Harness 执行管
 
 总体关系：
 
-```mermaid
-flowchart TB
-    subgraph SH["SafeHarness 安全层 —— 本项目核心（原创）"]
-        INFORM["输入防线<br/>正则 + 语义 Judge"]
-        CONSTRAIN["能力门<br/>签名令牌 + 特权分离"]
-        GW["工具网关<br/>强制回执 + 原子消费"]
-        SUP["运行监督<br/>+ 人工复核队列"]
-        PC["策略中心<br/>热规则 · AI 起草 · 回滚"]
-        MCPG["MCP 守卫<br/>描述扫描 + 策略中间件"]
-    end
-    subgraph BASE["平台基座 —— HugAgentOS + 本项目平台扩展"]
-        CHAT["受保护对话链"]
-        FSM["FSM 规划模式"]
-        BRIDGE["外部智能体桥<br/>AutoGen / OpenAI Agents / smolagents"]
-        UI["安全运营前端<br/>策略中心 · 复核工作台"]
-    end
-    SH -- "强制管控：消息 / 工具 / 记忆 / 审计" --> BASE
-```
+![Upear 总体架构：SafeHarness 安全层 × 平台基座](figures/upear-overview-zh.svg)
 
 平台分层细节见 [Upear-Backend 仓库 README](https://github.com/JueeeX/Upear-Backend)（含安全增强架构图）。
 
@@ -121,6 +104,8 @@ flowchart TB
 ## 多智能体规划能力
 
 ### FSM 多智能体规划：LLM 提案 + 确定性编译
+
+![FSM 多智能体规划：从任务到受控执行](figures/fsm-planning-zh.svg)
 
 规划权在 LLM，执行权在代码：
 

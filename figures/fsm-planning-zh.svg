@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 1560" role="img" aria-labelledby="title desc">
+  <title id="title">FSM 多智能体规划：从任务到受控执行</title>
+  <desc id="desc">用户任务经输入检查后，LLM 从 AgentCard 目录中只提案能力与顺序；fsm_builder 确定性编译补全依赖扩展、输入输出绑定与失败路径；validate_fsm 与 plan_hash 锁定后人工确认；执行期由代码监督者逐步驱动，每步经能力门、强制回执与审计，上一步输出绑定下一步输入。</desc>
+  <defs>
+    <style>
+      text { font-family: "Microsoft YaHei", "PingFang SC", Inter, "Segoe UI", Arial, sans-serif; }
+      .step { fill: #eaf2fb; stroke: #24569f; stroke-width: 4; }
+      .step-num { fill: #24569f; font-size: 30px; font-weight: 800; }
+      .step-title { fill: #171717; font-size: 27px; font-weight: 800; }
+      .step-sub { fill: #555; font-size: 21px; font-weight: 500; }
+      .flow-arrow { stroke: #24569f; stroke-width: 5; fill: none; marker-end: url(#arrow-blue); }
+      .panel { fill: #f7f9fc; stroke: #8bb3dc; stroke-width: 4; }
+      .panel-title { fill: #2559a5; font-size: 30px; font-weight: 800; }
+      .card { fill: #fff; stroke: #24569f; stroke-width: 4; }
+      .card-head { fill: #24569f; }
+      .card-head-text { fill: #fff; font-size: 26px; font-weight: 800; }
+      .card-text { fill: #171717; font-size: 23px; font-weight: 600; }
+      .card-sub { fill: #555; font-size: 21px; font-weight: 500; }
+      .mono { fill: #0f3d75; font-size: 21px; font-family: Consolas, "Courier New", monospace; font-weight: 600; }
+      .safe { fill: #fdf1f0; stroke: #c40000; stroke-width: 4; }
+      .safe-text { fill: #c40000; font-size: 24px; font-weight: 800; }
+      .safe-sub { fill: #555; font-size: 21px; font-weight: 500; }
+      .bind { fill: #fff9ed; stroke: #dfa12d; stroke-width: 4; }
+      .bind-text { fill: #875600; font-size: 23px; font-weight: 700; }
+      .approve { fill: #f3ecfb; stroke: #6b3fa0; stroke-width: 4; }
+      .approve-text { fill: #6b3fa0; font-size: 24px; font-weight: 800; }
+      .exec { fill: #eefaf0; stroke: #1d7a3e; stroke-width: 5; }
+      .exec-title { fill: #1d7a3e; font-size: 30px; font-weight: 800; }
+      .exec-step { fill: #fff; stroke: #1d7a3e; stroke-width: 3.5; }
+      .exec-step-text { fill: #14532d; font-size: 23px; font-weight: 700; }
+      .exec-sub { fill: #555; font-size: 21px; font-weight: 500; }
+      .bindline { stroke: #dfa12d; stroke-width: 4; stroke-dasharray: 10 8; fill: none; marker-end: url(#arrow-gold); }
+      .bindline-label { fill: #875600; font-size: 20px; font-weight: 700; }
+      .lock { fill: #eef2ff; stroke: #3f51b5; stroke-width: 4; }
+      .lock-text { fill: #3f51b5; font-size: 23px; font-weight: 700; }
+    </style>
+    <marker id="arrow-blue" markerWidth="12" markerHeight="10" refX="10" refY="5" orient="auto">
+      <path d="M0,0 L12,5 L0,10 z" fill="#24569f"/>
+    </marker>
+    <marker id="arrow-gold" markerWidth="12" markerHeight="10" refX="10" refY="5" orient="auto">
+      <path d="M0,0 L12,5 L0,10 z" fill="#dfa12d"/>
+    </marker>
+  </defs>
+
+  <!-- ======== 顶部六步流程 ======== -->
+  <rect x="40" y="30" width="540" height="130" class="step"/>
+  <text x="65" y="78" class="step-num">①</text>
+  <text x="110" y="78" class="step-title">用户任务 + 输入检查</text>
+  <text x="65" y="118" class="step-sub">SafeHarness 输入防线逐条语义验证，</text>
+  <text x="65" y="148" class="step-sub">注入 / 越权话术直接拦截（fail-closed）</text>
+
+  <rect x="400" y="30" width="540" height="130" class="step"/>
+  <text x="425" y="78" class="step-num">②</text>
+  <text x="470" y="78" class="step-title">LLM 只提案（规划权）</text>
+  <text x="425" y="118" class="step-sub">从 AgentCard 目录中选能力与顺序，</text>
+  <text x="425" y="148" class="step-sub">输出结构化 JSON——不生成执行逻辑</text>
+
+  <rect x="760" y="30" width="540" height="130" class="step"/>
+  <text x="785" y="78" class="step-num">③</text>
+  <text x="830" y="78" class="step-title">fsm_builder 确定性编译</text>
+  <text x="785" y="118" class="step-sub">纯代码：依赖扩展、输入/输出绑定、</text>
+  <text x="785" y="148" class="step-sub">failure 路径、高危动作强制审批节点</text>
+
+  <rect x="1120" y="30" width="540" height="130" class="step"/>
+  <text x="1145" y="78" class="step-num">④</text>
+  <text x="1190" y="78" class="step-title">校验 + 锁定</text>
+  <text x="1145" y="118" class="step-sub">validate_fsm 校验结构；plan_hash /</text>
+  <text x="1145" y="148" class="step-sub">registry_hash 锁定计划与能力注册表</text>
+
+  <rect x="1480" y="30" width="420" height="130" class="approve"/>
+  <text x="1505" y="78" class="approve-text">⑤ 人工确认</text>
+  <text x="1505" y="118" class="step-sub">PlanCard 预览全图：每步做什么、</text>
+  <text x="1505" y="148" class="step-sub">输入从哪来、失败走哪条路</text>
+
+  <rect x="1920" y="30" width="440" height="130" class="exec"/>
+  <text x="1945" y="78" class="exec-title">⑥ 受控执行（SSE）</text>
+  <text x="1945" y="118" class="step-sub">监督者是代码不是模型：按锁定的</text>
+  <text x="1945" y="148" class="step-sub">FSM 状态机逐步驱动，全程可追踪</text>
+
+  <path d="M 580 95 L 700 95" class="flow-arrow"/>
+  <path d="M 940 95 L 1060 95" class="flow-arrow"/>
+  <path d="M 1300 95 L 1420 95" class="flow-arrow"/>
+  <path d="M 1660 95 L 1780 95" class="flow-arrow"/>
+  <path d="M 1900 95 L 2020 95" class="flow-arrow"/>
+
+  <!-- ======== 中带左：AgentCard 目录 + LLM 提案 ======== -->
+  <rect x="40" y="210" width="1140" height="640" class="panel"/>
+  <text x="70" y="268" class="panel-title">规划的原材料：AgentCard 目录（服务端声明，非模型编造）</text>
+
+  <!-- card 1 -->
+  <rect x="70" y="300" width="510" height="330" class="card"/>
+  <rect x="70" y="300" width="510" height="62" class="card-head"/>
+  <text x="95" y="340" class="card-head-text">noc-diagnosis-agent · alarm.query</text>
+  <text x="95" y="400" class="card-text">input_schema:  { device_id }</text>
+  <text x="95" y="440" class="card-text">output_schema: { device_id, alarms,</text>
+  <text x="95" y="474" class="card-text">                 outcome }</text>
+  <text x="95" y="514" class="card-sub">required_capabilities: nms:alarms:read</text>
+  <text x="95" y="550" class="card-sub">risk_level: low · reversibility: read_only</text>
+  <text x="95" y="586" class="card-sub">outcomes: success / failure / timeout</text>
+  <text x="95" y="618" class="card-sub">→ 输入输出的形状在卡片上声明，供绑定校验</text>
+
+  <!-- card 2 -->
+  <rect x="620" y="300" width="510" height="330" class="card"/>
+  <rect x="620" y="300" width="510" height="62" class="card-head"/>
+  <text x="645" y="340" class="card-head-text">config-change-agent · interface.restart</text>
+  <text x="645" y="400" class="card-text">input_schema:  { device_id, interface }</text>
+  <text x="645" y="440" class="card-text">output_schema: { outcome, summary }</text>
+  <text x="645" y="480" class="card-sub">required_capabilities: nms:devices:write</text>
+  <text x="645" y="516" class="card-sub">risk_level: high · side_effects: external_state</text>
+  <text x="645" y="552" class="card-sub">→ 高危动作：编译期强制插入人工审批节点</text>
+  <text x="645" y="586" class="card-sub">→ 无补偿器 / 不可逆时拒绝进入计划</text>
+
+  <!-- LLM proposal -->
+  <text x="70" y="680" class="panel-title">LLM 提案（结构化 JSON，仅此而已）</text>
+  <text x="70" y="726" class="mono">{ "task": { "goal": "诊断 NE-WH-OLT-01 告警", "inputs": { "device_id": "NE-WH-OLT-01" } },</text>
+  <text x="70" y="762" class="mono">  "selected_capabilities": [ "alarm.query" → "alarm.diagnose" ]  }</text>
+  <text x="70" y="800" class="step-sub">模型只回答「用哪些能力、按什么顺序」；参数怎么传、失败怎么办，全部由编译器决定。</text>
+
+  <!-- ======== 中带右：编译细节 ======== -->
+  <rect x="1220" y="210" width="1140" height="640" class="panel"/>
+  <text x="1250" y="268" class="panel-title">fsm_builder 编译期补全（纯代码，确定性）</text>
+
+  <rect x="1250" y="300" width="1080" height="120" class="bind"/>
+  <text x="1280" y="345" class="bind-text">依赖扩展：alarm.diagnose 需要 alarms 输入 → 自动把 alarm.query 编排为前置步骤</text>
+  <text x="1280" y="390" class="bind-text">失败路径：每步按卡片 outcomes 补全 failure / timeout 分支与终止条件</text>
+
+  <rect x="1250" y="445" width="1080" height="180" class="bind"/>
+  <text x="1280" y="490" class="bind-text">输入绑定（input binding）——三种来源，编译期静态确定：</text>
+  <text x="1280" y="530" class="mono">· task input     : device_id ← 用户任务输入</text>
+  <text x="1280" y="566" class="mono">· upstream output: alarms    ← step(alarm.query).output.alarms</text>
+  <text x="1280" y="602" class="mono">· literal        : interface ← "GE0/0/3"（计划内显式常量）</text>
+
+  <rect x="1250" y="650" width="1080" height="90" class="lock"/>
+  <text x="1280" y="690" class="lock-text">输出绑定（output binding）：每步的 output_schema 在编译期登记；</text>
+  <text x="1280" y="726" class="lock-text">下游只能引用已声明字段——引用不存在字段 = 编译失败，计划无法生成。</text>
+
+  <rect x="1250" y="765" width="1080" height="60" class="approve"/>
+  <text x="1280" y="805" class="approve-text">高危动作 → 编译产物自带审批节点（确认前不执行、执行前再确认）</text>
+
+  <!-- ======== 下带：受控执行状态机 ======== -->
+  <rect x="40" y="890" width="2320" height="640" class="exec"/>
+  <text x="70" y="948" class="exec-title">⑥ 受控执行：计划锁定后，监督者是代码</text>
+
+  <!-- steps -->
+  <rect x="70" y="985" width="640" height="150" class="exec-step"/>
+  <text x="95" y="1030" class="exec-step-text">Step 1 — alarm.query(device_id)</text>
+  <text x="95" y="1070" class="exec-sub">输入绑定生效：device_id = NE-WH-OLT-01</text>
+  <text x="95" y="1108" class="exec-sub">能力门 nms:alarms:read ✓ → 网关回执 ✓ → 审计 ✓</text>
+
+  <rect x="800" y="985" width="700" height="150" class="exec-step"/>
+  <text x="825" y="1030" class="exec-step-text">Step 2 — alarm.diagnose(device_id, alarms)</text>
+  <text x="825" y="1070" class="exec-sub">输出绑定生效：alarms ← Step 1 实际返回值</text>
+  <text x="825" y="1108" class="exec-sub">schema 校验 ✓ → 语义复核 ✓ → 审计 ✓</text>
+
+  <rect x="1590" y="985" width="740" height="150" class="approve"/>
+  <text x="1615" y="1030" class="approve-text">Step 3 — interface.restart（高危）</text>
+  <text x="1615" y="1070" class="step-sub">计划内审批节点：执行前再次请求人工批准，</text>
+  <text x="1615" y="1108" class="step-sub">拒绝即终止；该步不会因模型一句话被跳过</text>
+
+  <path d="M 710 1060 L 800 1060" class="flow-arrow"/>
+  <path d="M 1500 1060 L 1590 1060" class="flow-arrow"/>
+  <path d="M 420 1135 L 420 1185 L 1140 1185 L 1140 1135" class="bindline"/>
+  <text x="700" y="1218" class="bindline-label">输出绑定：Step 1 的实际返回值流入 Step 2 的输入槽（形状由卡片 schema 声明）</text>
+
+  <!-- guarantees -->
+  <rect x="70" y="1250" width="2260" height="240" fill="none" stroke="#1d7a3e" stroke-width="3" stroke-dasharray="12 9"/>
+  <text x="100" y="1300" class="exec-title">怎么确保任务按规划进行？——四道保险</text>
+  <text x="100" y="1350" class="exec-sub">① plan_hash / registry_hash 锁定：计划或能力注册表任何改动 → 哈希失配 → 拒绝执行（防止计划被偷换）；</text>
+  <text x="100" y="1392" class="exec-sub">② 执行权在代码：状态迁移由监督者驱动，模型只能看到当前步的输入槽，无法决定下一步调什么；</text>
+  <text x="100" y="1434" class="exec-sub">③ 每步过安全层：能力门校验 capability → 工具网关强制回执 → 审计落账，任何一步 deny 即停；</text>
+  <text x="100" y="1476" class="exec-sub">④ 输出绑定强校验：下游输入槽只接受上游已声明的 output_schema 字段，形状不符 = 步骤失败，不会静默传错值。</text>
+</svg>
