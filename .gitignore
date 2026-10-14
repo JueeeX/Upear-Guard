@@ -41,3 +41,15 @@ figures/*.tiff
 
 # ZCode session tooling
 .zcode/
+
+# 内部工作文档（交接记录/实验计划/安全评估，不入开源仓）
+docs/handoff-*.md
+docs/ablation-channel-study-plan.md
+docs/agentprobe-experiment-plan-2026-09-15.md
+docs/agentprobe-multi-agent-audit-2026-09-15.md
+docs/multi-agent-fsm-implementation-plan-2026-08-17.md
+docs/security-assessment-2026-09-30.md
+docs/staging-validation-2026-07-20.md
+docs/tdsc-paper-workplan.md
+docs/work-plan-2026-08-03-2026-12-27-multiagent.md
+docs/work-plan-2026-08-03-2026-12-27.md
